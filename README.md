@@ -27,7 +27,7 @@ Desarrollar una aplicación multiplataforma inteligente que permita gestionar y 
 7) Módulo de IA.
 - Modelo de datos: Persistencia híbrida: Firebase (tiempo real, notificaciones, autenticación) y SQL (información estructurada e histórica).
 
-* Funcionalidades
+## Funcionalidades
 - Control de usuarios: Registro, inicio de sesión, recuperación de contraseña, perfil, vehículos, roles (Usuario/Administrador), bloqueo y administración de cuentas.
 - Consulta de estacionamientos: Lista y mapa, detalle, disponibilidad, comparación y mapa de espacios con estado.
 IoT en tiempo real:	Detección de ocupado/libre con sensores, publicación MQTT por HiveMQ, actualización inmediata y monitoreo de dispositivos.
@@ -39,7 +39,7 @@ IoT en tiempo real:	Detección de ocupado/libre con sensores, publicación MQTT 
 - Reportes: Ocupación diaria/semanal/mensual, reservaciones, historial y estadísticas con gráficas; exportación.
 - Multiplataforma: Misma cuenta y funciones en Android, iOS y web.
 
-** Actores
+## Actores
 - Usuario -> Principal
 - Administrador -> Principal
 - Sistema IoT -> Secundario(dispositivo)
@@ -47,7 +47,7 @@ IoT en tiempo real:	Detección de ocupado/libre con sensores, publicación MQTT 
 - Modulo de IA -> Secundario(sistema)
 - Servicios externos -> Secudnario(sistema)
 
-*** Herramientas de dasarrollo
+## Herramientas de dasarrollo
 - App movil (multiplataforma) -> React Native
 - Panel administrador (web) -> React
 - Backend/API -> Node.js + Express
