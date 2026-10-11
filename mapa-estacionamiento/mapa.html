@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Estacionamiento Inteligente</title>
+    <!-- Tailwind CSS for minimalist layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for sleek icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+     <link rel="stylesheet" href="../CSS/mapa.css">
+</head>
+<body class="bg-black text-white min-h-screen flex flex-col selection:bg-white selection:text-black">
+
+    <!-- Header -->
+    <header class="bg-[#000000] border-b border-[#242424] px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-2xl">
+        <div class="flex items-center space-x-4">
+            <div class="bg-white text-black font-black text-xl px-3 py-1.5 rounded-none tracking-tighter shadow-md">
+                SMARTPARK
+            </div>
+            <div class="h-6 w-[1px] bg-[#242424] hidden sm:block"></div>
+            <div>
+                <h1 class="text-base font-semibold tracking-wide text-white uppercase">Parking Ops</h1>
+                <p class="text-xs text-[#757575]">Monitoreo de espacios y flujo vehicular en tiempo real</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-2 bg-[#121212] px-3.5 py-1.5 rounded-full border border-[#242424]">
+                <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                <span class="text-xs font-medium text-[#E0E0E0] tracking-wide uppercase">Sistema En Vivo</span>
+            </div>
+            <button id="toggleSimBtn" class="bg-white hover:bg-[#E0E0E0] text-black px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all flex items-center space-x-2 active:scale-95">
+                <i class="fa-solid fa-pause text-xs" id="simIcon"></i>
+                <span id="simText">Pausar Tráfico</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        <!-- Left Panel: Minimalist Analytics & Controls -->
+        <section class="lg:col-span-1 flex flex-col space-y-5">
+            
+            <!-- Statistics Card -->
+            <div class="bg-[#121212] border border-[#242424] rounded-2xl p-5 shadow-2xl">
+                <h2 class="text-xs font-bold text-[#757575] uppercase tracking-widest mb-4 flex items-center justify-between">
+                    <span>Métricas de Capacidad</span>
+                    <i class="fa-solid fa-chart-simple text-[#757575]"></i>
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-3 mb-5">
+                    <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                        <span class="text-[10px] uppercase font-bold text-[#757575] block mb-0.5">Total Capacidad</span>
+                        <span id="statTotal" class="text-2xl font-semibold text-white">0</span>
+                    </div>
+                    <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                        <span class="text-[10px] uppercase font-bold text-white block mb-0.5">Libres</span>
+                        <span id="statFree" class="text-2xl font-bold text-white">0</span>
+                    </div>
+                    <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                        <span class="text-[10px] uppercase font-bold text-[#757575] block mb-0.5">Ocupados</span>
+                        <span id="statOccupied" class="text-2xl font-semibold text-[#757575]">0</span>
+                    </div>
+                    <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                        <span class="text-[10px] uppercase font-bold text-[#E0E0E0] block mb-0.5">Reservados</span>
+                        <span id="statReserved" class="text-2xl font-semibold text-[#E0E0E0]">0</span>
+                    </div>
+                </div>
+
+                <!-- Occupancy Rate Bar -->
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-[#E0E0E0] mb-2">
+                        <span class="text-[#757575] uppercase text-[10px] font-bold tracking-wider">Ocupación Actual</span>
+                        <span id="occupancyRate" class="font-bold">0%</span>
+                    </div>
+                    <div class="w-full bg-[#000000] h-2 rounded-full overflow-hidden p-0.5 border border-[#242424]">
+                        <div id="occupancyBar" class="bg-white h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Minimalist Legend & Info -->
+            <div class="bg-[#121212] border border-[#242424] rounded-2xl p-5 shadow-2xl flex-1 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-xs font-bold text-[#757575] uppercase tracking-widest mb-4 flex items-center justify-between">
+                        <span>Estados del Plano</span>
+                        <i class="fa-solid fa-layer-group text-[#757575]"></i>
+                    </h2>
+                    
+                    <div class="space-y-2.5 mb-6">
+                        <div class="flex items-center space-x-3 bg-[#000000] p-3 rounded-xl border border-[#242424]">
+                            <div class="w-4 h-4 rounded-md border-2 border-white bg-transparent"></div>
+                            <div class="text-xs">
+                                <span class="font-bold text-white block">Libre</span>
+                                <span class="text-[#757575] text-[11px]">Disponible para estacionar</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3 bg-[#000000] p-3 rounded-xl border border-[#242424]">
+                            <div class="w-4 h-4 rounded-md bg-[#242424] border border-[#333333]"></div>
+                            <div class="text-xs">
+                                <span class="font-bold text-[#757575] block">Ocupado</span>
+                                <span class="text-[#757575] text-[11px]">Vehículo en espacio</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3 bg-[#000000] p-3 rounded-xl border border-[#242424]">
+                            <div class="w-4 h-4 rounded-md bg-[#333333] border border-[#757575]"></div>
+                            <div class="text-xs">
+                                <span class="font-bold text-[#E0E0E0] block">Reservado</span>
+                                <span class="text-[#757575] text-[11px]">Reservado para Uber VIP</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#000000] border border-[#242424] rounded-xl p-3.5 text-xs text-[#E0E0E0] leading-relaxed mb-4">
+                        <div class="flex items-start space-x-2">
+                            <i class="fa-solid fa-hand-pointer text-white mt-0.5"></i>
+                            <span>Haz clic en cualquier cajón para cambiar su estado interactivo en tiempo real.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-[#242424] flex flex-col space-y-2">
+                    <button id="resetParkingBtn" class="w-full bg-[#000000] hover:bg-[#242424] text-white border border-[#242424] py-2.5 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-center space-x-2 active:scale-98">
+                        <i class="fa-solid fa-rotate-right text-xs"></i>
+                        <span>Reiniciar Distribución</span>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Panel: Monochromatic Canvas Map & Dynamic Simulation -->
+        <section class="lg:col-span-3 bg-[#121212] border border-[#242424] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
+            
+            <!-- Canvas Header Bar -->
+            <div class="bg-[#000000] px-5 py-3.5 border-b border-[#242424] flex justify-between items-center z-10">
+                <div class="flex items-center space-x-3">
+                    <span class="w-2 h-2 bg-white rounded-full"></span>
+                    <span class="text-xs font-bold text-white uppercase tracking-widest">Plano Gráfico de Distribución</span>
+                </div>
+                <div class="text-xs text-[#757575] bg-[#121212] px-3.5 py-1.5 rounded-full border border-[#242424]">
+                    <i class="fa-solid fa-car text-white mr-1.5"></i> Vehículos circulando: <span id="carCount" class="font-bold text-white">0</span>
+                </div>
+            </div>
+
+            <!-- Canvas Viewport Wrapper -->
+            <div class="relative flex-1 w-full bg-[#121212] flex items-center justify-center overflow-hidden min-h-[520px]">
+                <canvas id="parkingCanvas" class="w-full h-full block cursor-pointer"></canvas>
+                
+                <!-- Uber Minimalist Tooltip Overlay -->
+                <div id="spotTooltip" class="absolute hidden pointer-events-none bg-black/95 border border-[#333333] text-white text-xs px-3.5 py-2.5 rounded-xl shadow-2xl z-20 backdrop-blur transition-opacity duration-150">
+                    <span id="tooltipTitle" class="font-bold block text-white tracking-wider mb-0.5">Cajón A-01</span>
+                    <span id="tooltipStatus" class="text-[#757575]">Estado: Libre</span>
+                </div>
+            </div>
+
+            <!-- Canvas Footer Legend / Info Bar -->
+            <div class="bg-[#000000] px-5 py-3 border-t border-[#242424] flex flex-wrap justify-between items-center text-xs text-[#757575] gap-2">
+                <div class="flex items-center space-x-5">
+                    <span class="flex items-center"><i class="fa-solid fa-road text-[#333333] mr-1.5"></i> Vías Delineadas</span>
+                    <span class="flex items-center"><i class="fa-solid fa-circle text-white text-[8px] mr-1.5"></i> Interacción Activa</span>
+                </div>
+                <div class="font-mono text-[11px] text-[#757575]">
+                    60 FPS • MINIMALIST ENGINE
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- JavaScript Application Logic -->
+    <script type="module" src="../JS/mapa.js"></script>
+</body>
+</html>
