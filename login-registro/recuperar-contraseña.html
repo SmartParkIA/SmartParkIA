@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Recuperar Contraseña</title>
+    <link rel="stylesheet" href="../CSS/r-contraseña.css">
+</head>
+<body>
+
+    <div class="container">
+        <!-- LADO IZQUIERDO -->
+        <div class="left-panel">
+            <div>
+                <h1>¡Hola! 👋</h1>
+                <p class="subtitle">Recupera tu cuenta contestando el formulario a la derecha.</p>
+                
+                <!-- Escena de Animación -->
+                <div class="parking-scene">
+                    <div class="parking-spot"></div>
+                    <div class="car">
+                        <div class="car-windshield"></div>
+                        <div class="car-headlights"></div>
+                        <div class="wheel wheel-tl"></div>
+                        <div class="wheel wheel-tr"></div>
+                        <div class="wheel wheel-bl"></div>
+                        <div class="wheel wheel-br"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tips-container">
+                <div class="tips-title">💡 Tips para no perder tu acceso:</div>
+                <ul class="tips-list">
+                    <li><strong>Usa un gestor de contraseñas:</strong> Herramientas como 1Password o Bitwarden guardan tus claves seguras.</li>
+                    <li><strong>Guarda credenciales en el navegador:</strong> Permite que mantenga una copia cifrada para autocompletar.</li>
+                    <li><strong>Crea patrones memorables:</strong> Combina frases cortas con números o caracteres especiales fáciles de recordar.</li>
+                    <li><strong>Mantén tu correo al día:</strong> Asegúrate de tener acceso a la cuenta vinculada a SmartPark IA.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- LADO DERECHO -->
+        <div class="right-panel">
+            <h2>Restablecer acceso</h2>
+            <p class="desc">Ingresa tu correo electrónico y te enviaremos las instrucciones para restablecer tu contraseña.</p>
+            
+            <form id="recuperarForm">
+                <label for="email">Correo electrónico</label>
+                <input type="email" id="email" required placeholder="nombre@ejemplo.com">
+
+                <button type="submit">Enviar enlace</button>
+            </form>
+            <p id="mensaje"></p>
+            
+            <div class="link">
+                <a href="login.html">Volver al inicio de sesión</a>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJVPRi2rCtqhOfM_d31ZfrFDl43JDAXME",
+            authDomain: "smartpark-ia.firebaseapp.com",
+            projectId: "smartpark-ia",
+            storageBucket: "smartpark-ia.firebasestorage.app",
+            messagingSenderId: "118354121865",
+            appId: "1:118354121865:web:c53be199d438c4a4106258",
+            measurementId: "G-6P0E8XNVHF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const form = document.getElementById("recuperarForm");
+        const mensaje = document.getElementById("mensaje");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("email").value;
+
+            mensaje.style.color = "#A6A6A6";
+            mensaje.textContent = "Enviando correo de recuperación...";
+
+            try {
+                await sendPasswordResetEmail(auth, email);
+                mensaje.style.color = "#27AD52";
+                mensaje.textContent = "¡Correo enviado! Revisa tu bandeja de entrada o spam.";
+                form.reset();
+            } catch (error) {
+                mensaje.style.color = "#E11900";
+                mensaje.textContent = "Error: No se pudo enviar el correo (verifica que exista).";
+            }
+        });
+    </script>
+</body>
+</html>
