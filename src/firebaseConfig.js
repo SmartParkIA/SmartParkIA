@@ -3,7 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAJVPri2rCtqhOfM_d31ZfRDl43JDAXME",
+  apiKey: "AIzaSyAJVPRi2rCtqhOfM_d31ZfrFDl43JDAXME",
   authDomain: "smartpark-ia.firebaseapp.com",
   projectId: "smartpark-ia",
   storageBucket: "smartpark-ia.firebasestorage.app",
