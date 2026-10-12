@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Registro</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 380px; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        label { display: block; margin-top: 8px; font-weight: bold; color: #555; font-size: 14px; }
+        input { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        .password-container { position: relative; width: 100%; }
+        .password-container input { width: 100%; padding-right: 40px; box-sizing: border-box; }
+        .toggle-password { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; }
+        .toggle-password svg { width: 20px; height: 20px; fill: #666; }
+        .toggle-password:hover svg { fill: #007bff; }
+
+        button[type="submit"] { width: 100%; background-color: #007bff; color: white; border: none; padding: 10px; margin-top: 15px; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        button[type="submit"]:hover { background-color: #0056b3; }
+        #mensaje { margin-top: 12px; text-align: center; font-weight: bold; font-size: 14px; }
+        .link { text-align: center; margin-top: 15px; font-size: 14px; }
+        .link a { color: #007bff; text-decoration: none; }
+        .link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>SmartPark IA</h2>
+        <form id="registroForm">
+            <label for="nombres">Nombres:</label>
+            <input type="text" id="nombres" required>
+
+            <label for="apellidoPaterno">Apellido Paterno:</label>
+            <input type="text" id="apellidoPaterno" required>
+
+            <label for="apellidoMaterno">Apellido Materno:</label>
+            <input type="text" id="apellidoMaterno" required>
+
+            <label for="fechaNacimiento">Fecha de Nacimiento:</label>
+            <input type="date" id="fechaNacimiento" required>
+
+            <label for="email">Correo electrónico:</label>
+            <input type="email" id="email" required>
+
+            <label for="password">Contraseña:</label>
+            <div class="password-container">
+                <input type="password" id="password" required>
+                <!-- Botón de ver contraseña (el ojito) -->
+                <button type="button" id="togglePassword" class="toggle-password" title="Ver contraseña">
+                    <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <button type="submit">Registrarse</button>
+        </form>
+        <p id="mensaje"></p>
+        
+        <div class="link">
+            ¿Ya tienes una cuenta? <a href="login.html">Inicia sesión aquí</a>
+        </div>
+    </div>
+
+    <!-- Script con la configuración oficial de Firebase y lógica corregida -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJVPRi2rCtqhOfM_d31ZfrFDl43JDAXME",
+            authDomain: "smartpark-ia.firebaseapp.com",
+            projectId: "smartpark-ia",
+            storageBucket: "smartpark-ia.firebasestorage.app",
+            messagingSenderId: "118354121865",
+            appId: "1:118354121865:web:c53be199d438c4a4106258",
+            measurementId: "G-6P0E8XNVHF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const form = document.getElementById("registroForm");
+        const mensaje = document.getElementById("mensaje");
+        const passwordInput = document.getElementById("password");
+        const togglePasswordBtn = document.getElementById("togglePassword");
+        const eyeIcon = document.getElementById("eyeIcon");
+
+        const eyeOpenSVG = '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>';
+        const eyeClosedSVG = '<path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.12c0-1.66-1.34-3-3-3l-.17.02z"/>';
+
+        // Lógica del botón de ver/ocultar contraseña
+        togglePasswordBtn.addEventListener("click", () => {
+            if (passwordInput.type === "password") {
+                passwordInput.type = "text";
+                eyeIcon.innerHTML = eyeClosedSVG;
+            } else {
+                passwordInput.type = "password";
+                eyeIcon.innerHTML = eyeOpenSVG;
+            }
+        });
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            
+            const nombres = document.getElementById("nombres").value;
+            const apellidoPaterno = document.getElementById("apellidoPaterno").value;
+            const apellidoMaterno = document.getElementById("apellidoMaterno").value;
+            const fechaNacimiento = document.getElementById("fechaNacimiento").value; // Se guarda como texto plano "YYYY-MM-DD"
+            const email = document.getElementById("email").value;
+            const password = passwordInput.value;
+
+            mensaje.style.color = "#007bff";
+            mensaje.textContent = "Registrando usuario y enviando correo...";
+
+            try {
+                // 1. Crear usuario en Authentication
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // 2. Enviar correo de verificación automático
+                await sendEmailVerification(user);
+
+                // 3. Guardar datos en Firestore (fechaNacimiento como texto para evitar el error de Timestamp)
+                await setDoc(doc(db, "users", user.uid), {
+                    uid: user.uid,
+                    nombres: nombres,
+                    apellidoPaterno: apellidoPaterno,
+                    apellidoMaterno: apellidoMaterno,
+                    correo: email,
+                    fechaNacimiento: fechaNacimiento, 
+                    estado: true,
+                    rol: "usuario",
+                    fechaCreacion: new Date().toISOString()
+                });
+
+                mensaje.style.color = "green";
+                mensaje.textContent = "¡Registro exitoso! Te hemos enviado un mensaje a tu correo para verificar tu cuenta.";
+                form.reset();
+            } catch (error) {
+                console.error("Error:", error.code, error.message);
+                mensaje.style.color = "red";
+                
+                // Mensaje amigable si el correo ya está registrado en Firebase
+                if (error.code === 'auth/email-already-in-use') {
+                    mensaje.textContent = "Error: Este correo electrónico ya está registrado.";
+                } else {
+                    mensaje.textContent = "Error: " + error.message;
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>git status
