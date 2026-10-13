@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Perfil de Usuario</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #121212; color: #E0E0E0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Menú Lateral */
+        .sidebar { 
+            width: 260px; 
+            background: #18181b; 
+            border-right: 1px solid #27272a; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        .sidebar-header { 
+            padding: 25px 20px; 
+            font-size: 1.25rem; 
+            font-weight: bold; 
+            color: #FFFFFF; 
+            border-bottom: 1px solid #27272a; 
+            text-align: center; 
+        }
+        .sidebar-menu { list-style: none; padding: 20px 0; flex: 1; }
+        .sidebar-menu li a { display: block; padding: 14px 24px; color: #a1a1aa; text-decoration: none; font-size: 15px; transition: 0.2s; }
+        .sidebar-menu li.active a, .sidebar-menu li a:hover { background: #27272a; color: #FFFFFF; border-left: 4px solid #3b82f6; }
+
+        /* Botón Cerrar Sesión */
+        .sidebar-footer { padding: 20px; border-top: 1px solid #27272a; }
+        .logout-btn { 
+            width: 100%; 
+            background: #ef4444; 
+            color: white; 
+            border: none; 
+            padding: 12px; 
+            border-radius: 8px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: opacity 0.2s; 
+        }
+        .logout-btn:hover { opacity: 0.85; }
+
+        /* Contenido Principal */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: #121212; }
+        .navbar { height: 65px; background: #18181b; border-bottom: 1px solid #27272a; display: flex; align-items: center; padding: 0 30px; }
+        
+        .container { padding: 40px; max-width: 900px; margin: 0 auto; width: 100%; }
+        h2 { margin-bottom: 25px; color: #FFFFFF; font-size: 1.5rem; }
+
+        /* Tarjeta de Perfil */
+        .profile-card { 
+            background: #18181b; 
+            border: 1px solid #27272a;
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4); 
+            display: flex; 
+            gap: 40px; 
+            align-items: center; 
+        }
+        
+        .avatar-container { text-align: center; }
+        .avatar { 
+            width: 130px; 
+            height: 130px; 
+            border-radius: 50%; 
+            object-fit: cover; 
+            border: 3px solid #3b82f6; 
+            margin-bottom: 15px; 
+            background: #27272a; 
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        input[type="file"] { display: none; }
+        .upload-btn { 
+            background: #3b82f6; 
+            color: white; 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 13px; 
+            font-weight: 600;
+            display: inline-block; 
+            transition: background 0.2s;
+        }
+        .upload-btn:hover { background: #2563eb; }
+
+        .info-grid { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+        .info-group { 
+            background: #202023;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid #27272a;
+        }
+        .info-group label { display: block; font-size: 12px; color: #a1a1aa; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-group p { font-size: 16px; color: #FFFFFF; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-header">SmartPark IA</div>
+        <ul class="sidebar-menu">
+            <li class="active"><a href="perfilUsuario.html">Mi Perfil</a></li>
+            <!-- Enlace actualizado hacia la carpeta del mapa -->
+            <li><a href="mapa-estacionamiento/mapa.html">Mapa</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <button id="logoutBtn" class="logout-btn">Cerrar Sesión</button>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <header class="navbar">
+            <span style="font-weight: 600; color: #a1a1aa; font-size: 14px;">Panel de Usuario</span>
+        </header>
+
+        <div class="container">
+            <h2>Mi Información Personal</h2>
+            <div class="profile-card">
+                <div class="avatar-container">
+                    <img id="profileImage" src="https://via.placeholder.com/130" alt="Avatar" class="avatar">
+                    <br>
+                    <label for="fileInput" class="upload-btn">Subir Foto</label>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+                <div class="info-grid">
+                    <div class="info-group">
+                        <label>Nombres y Apellidos</label>
+                        <p id="userName">Cargando...</p>
+                    </div>
+                    <div class="info-group">
+                        <label>Correo Electrónico</label>
+                        <p id="userEmail">Cargando...</p>
+                    </div>
+                    <div class="info-group">
+                        <label>Rol en el Sistema</label>
+                        <p id="userRole">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Puedes reutilizar el mismo archivo perfil.js ya que lee los mismos IDs -->
+    <script type="module" src="./src/perfil.js"></script>
+</body>
+</html>
