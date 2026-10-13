@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Inicio de Sesión</title>
+
+    <style>
+
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family:Arial, Helvetica, sans-serif;
+        }
+
+        body{
+
+            background:#f4f6f9;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+
+        }
+
+        .card{
+
+            width:380px;
+            background:white;
+            border-radius:10px;
+            padding:30px;
+            box-shadow:0 5px 15px rgba(0,0,0,.15);
+
+        }
+
+        h2{
+
+            text-align:center;
+            color:#333;
+            margin-bottom:25px;
+
+        }
+
+        label{
+
+            display:block;
+            margin-top:15px;
+            margin-bottom:5px;
+            font-weight:bold;
+            color:#555;
+
+        }
+
+        input{
+
+            width:100%;
+            padding:10px;
+            border:1px solid #ccc;
+            border-radius:5px;
+            outline:none;
+
+        }
+
+        input:focus{
+
+            border-color:#0d6efd;
+
+        }
+
+        .password-container{
+
+            position:relative;
+
+        }
+
+        .password-container input{
+
+            padding-right:45px;
+
+        }
+
+        .toggle-password{
+
+            position:absolute;
+            top:50%;
+            right:10px;
+            transform:translateY(-50%);
+            background:none;
+            border:none;
+            cursor:pointer;
+
+        }
+
+        .toggle-password svg{
+
+            width:22px;
+            height:22px;
+            fill:#666;
+
+        }
+
+        button[type=submit]{
+
+            margin-top:25px;
+            width:100%;
+            border:none;
+            padding:12px;
+            background:#0d6efd;
+            color:white;
+            border-radius:5px;
+            font-size:16px;
+            cursor:pointer;
+
+        }
+
+        button[type=submit]:hover{
+
+            background:#0b5ed7;
+
+        }
+
+        #mensaje{
+
+            margin-top:15px;
+            text-align:center;
+            font-weight:bold;
+
+        }
+
+        .link{
+
+            text-align:center;
+            margin-top:20px;
+
+        }
+
+        .link a{
+
+            color:#0d6efd;
+            text-decoration:none;
+
+        }
+
+        .link a:hover{
+
+            text-decoration:underline;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="card">
+
+    <h2>SmartPark IA</h2>
+
+    <form id="loginForm">
+
+        <label>Correo electrónico</label>
+
+        <input
+            type="email"
+            id="email"
+            required>
+
+        <label>Contraseña</label>
+
+        <div class="password-container">
+
+            <input
+                type="password"
+                id="password"
+                required>
+
+            <button
+                type="button"
+                id="togglePassword"
+                class="toggle-password">
+
+                <svg id="eyeIcon" viewBox="0 0 24 24">
+
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+
+                </svg>
+
+            </button>
+
+        </div>
+
+        <button type="submit">
+
+            Iniciar Sesión
+
+        </button>
+
+    </form>
+
+    <p id="mensaje"></p>
+
+    <div class="link">
+
+        
+
+        <a href="">
+
+            Olvide mi contraseña
+
+        </a>
+
+    </div>
+
+    <div class="link">
+
+        ¿No tienes cuenta?
+
+        <a href="index.html">
+
+            Regístrate aquí
+
+        </a>
+
+    </div>
+
+</div>
+
+<script type="module" src="./src/login.js"></script>
+
+</body>
+</html>
