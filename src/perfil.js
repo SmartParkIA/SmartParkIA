@@ -1,15 +1,14 @@
 import { auth, db } from "./firebase/config.js";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { showToast } from "./toast.js";
 
 const nameEl = document.getElementById("userName");
 const emailEl = document.getElementById("userEmail");
 const roleEl = document.getElementById("userRole");
 const profileImage = document.getElementById("profileImage");
 const fileInput = document.getElementById("fileInput");
-const logoutBtn = document.getElementById("logoutBtn");
 
-// 1. Proteger ruta y cargar datos del usuario actual
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         window.location.replace("login.html");
@@ -30,20 +29,17 @@ onAuthStateChanged(auth, async (user) => {
 
             if (data.photoURL) {
                 profileImage.src = data.photoURL;
+            } else {
+                profileImage.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nombres)}&background=0072ff&color=fff&size=130`;
             }
-        } else {
-            nameEl.textContent = "Usuario sin perfil registrado";
-            emailEl.textContent = user.email;
-            roleEl.textContent = "usuario";
         }
     } catch (error) {
-        console.error("Error al obtener datos del perfil:", error);
+        console.error("Error al obtener datos:", error);
     }
 });
 
-// 2. Manejar la carga y actualización de la foto de perfil en Base64
 if (fileInput) {
-    fileInput.addEventListener("change", async (e) => {
+    fileInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -52,30 +48,15 @@ if (fileInput) {
             const base64Image = uploadEvent.target.result;
             profileImage.src = base64Image;
 
-            const user = auth.currentUser;
-            if (user) {
+            if (auth.currentUser) {
                 try {
-                    await updateDoc(doc(db, "users", user.uid), { photoURL: base64Image });
-                    alert("¡Foto de perfil actualizada con éxito!");
+                    await updateDoc(doc(db, "users", auth.currentUser.uid), { photoURL: base64Image });
+                    showToast("¡Foto actualizada!", "success");
                 } catch (error) {
-                    console.error("Error al guardar la foto:", error);
-                    alert("No se pudo actualizar la imagen.");
+                    showToast("Error al guardar la foto", "error");
                 }
             }
         };
         reader.readAsDataURL(file);
-    });
-}
-
-// 3. Manejar el cierre de sesión de forma segura
-if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-        try {
-            await signOut(auth);
-            window.location.replace("login.html");
-        } catch (error) {
-            console.error("Error al cerrar sesión:", error);
-            alert("No se pudo cerrar sesión.");
-        }
     });
 }
