@@ -1,23 +1,58 @@
+/* =========================================
+   1. ESTILOS BASE Y SCROLLBAR (Lo que ya teníamos)
+   ========================================= */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #000000;
-            color: #FFFFFF;
-        }
-        /* Uber minimalist custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #000000;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #242424;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #333333;
-        }
-   
+body { 
+    font-family: 'Outfit', "Segoe UI", sans-serif;
+    background-color: var(--bg-deep, #03060d); 
+    color: var(--text-primary, #f8fafc); 
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep, #03060d); }
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1); 
+    border-radius: 6px;
+    transition: background 0.3s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--neon-blue, #0072ff); 
+    box-shadow: 0 0 10px var(--neon-glow);
+}
+
+/* =========================================
+   2. ADAPTACIÓN DE TAILWIND A CRISTAL
+   ========================================= */
+.bg-\[\#121212\] { 
+    background-color: var(--card-surface, rgba(15, 23, 42, 0.82)) !important; 
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+.bg-\[\#000000\] { 
+    background-color: rgba(0, 0, 0, 0.3) !important; 
+}
+.border-\[\#242424\] { 
+    border-color: var(--border-line, rgba(255, 255, 255, 0.12)) !important; 
+}
+.text-\[\#757575\] {
+    color: var(--text-secondary, #94a3b8) !important;
+}
+
+/* =========================================
+   3. ESTILOS EXTRAÍDOS DEL HTML (Layout)
+   ========================================= */
+/* Ajuste para que Tailwind y nuestro layout no choquen */
+body { 
+    background-color: var(--bg-deep) !important; 
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden;
+    margin: 0;
+}
+
+.main-content { 
+    height: 100vh; 
+    overflow-y: auto; 
+    background: var(--bg-deep) !important;
+}

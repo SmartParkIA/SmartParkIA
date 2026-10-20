@@ -1,43 +1,32 @@
-
 import { auth, db } from "./firebase/config.js";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-
 document.addEventListener("DOMContentLoaded", () => {
-    
     const sidebarContainer = document.getElementById('sidebar-container');
 
-  
+    // Detectar subcarpeta
+    const isSubfolder = window.location.pathname.includes('mapa-estacionamiento');
+    const prefix = isSubfolder ? '../' : '';
+
+    // 1. CREAR EL OVERLAY DIRECTAMENTE EN EL BODY (No dentro del menú)
+    const overlay = document.createElement('div');
+    overlay.className = 'sidebar-overlay';
+    overlay.id = 'sidebarOverlay';
+    document.body.appendChild(overlay);
+
+    // 2. INYECTAR EL MENÚ
     if (sidebarContainer) {
         sidebarContainer.innerHTML = `
             <nav class="sidebar" id="sidebar">
                 <div class="sidebar-header">SmartPark IA</div>
-                
                 <ul class="sidebar-menu">
-                    <!-- ENLACE PARA TODOS LOS USUARIOS (Siempre visible) -->
-                    <li id="menu-perfil"><a href="perfil.html">Mi Perfil</a></li>
-                    
-                    <!-- ENLACES EXCLUSIVOS PARA USUARIOS NORMALES (Ocultos por defecto) -->
-                    <li id="menu-usuario" style="display: none;">
-                        <a href="mapa-estacionamiento/mapa.html">Mapa</a>
-                    </li>
-                    <li id="menu-historial" style="display: none;">
-                        <a href="historial.html">Mi Historial</a>
-                    </li>
-
-                    <!-- ENLACES EXCLUSIVOS PARA ADMINISTRADORES (Ocultos por defecto) -->
-                    <li id="menu-admin" style="display: none;">
-                        <a href="admin.html">Usuarios</a>
-                    </li>
-                    <li id="menu-reportes" style="display: none;">
-                        <a href="reportes.html">Reportes</a>
-                    </li>
+                    <li id="menu-perfil"><a href="${prefix}perfil.html">Mi Perfil</a></li>
+                    <li id="menu-usuario" style="display: none;"><a href="${prefix}mapa-estacionamiento/mapa.html">Mapa</a></li>
+                    <li id="menu-admin" style="display: none;"><a href="${prefix}admin.html">Usuarios</a></li>
                 </ul>
-
                 <div class="sidebar-footer">
                     <button id="logoutBtn" class="logout-btn">
-                        <!-- Ícono SVG de salida -->
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                             <polyline points="16 17 21 12 16 7"></polyline>
@@ -50,71 +39,59 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
+    // 3. LÓGICA DEL BOTÓN HAMBURGUESA (A prueba de fallos)
     const toggleBtn = document.getElementById("menuToggle");
     if (toggleBtn) {
-        toggleBtn.addEventListener("click", () => {
+        toggleBtn.addEventListener("click", (e) => {
+            e.preventDefault(); // Evita comportamientos extraños
             document.body.classList.toggle("sidebar-collapsed");
+            console.log("Menú clickeado. Clase actual:", document.body.className); // Para debug
         });
+    } else {
+        console.warn("No se encontró el botón con id 'menuToggle'");
     }
 
-    // ==========================================
-    // 3. RESALTAR EL ENLACE ACTIVO
-    // ==========================================
-    // Compara la URL actual de la ventana con el 'href' de los enlaces.
-    // Si coinciden, le pone la clase 'active' (que lo pinta de azul neón).
+    // 4. CERRAR MENÚ AL TOCAR EL FONDO OSCURO
+    overlay.addEventListener("click", () => {
+        document.body.classList.remove("sidebar-collapsed");
+    });
+
+    // 5. Resaltar menú activo
     const path = window.location.pathname.split("/").pop();
     const links = document.querySelectorAll('.sidebar-menu a');
     links.forEach(link => {
-        if (link.getAttribute('href') === path) {
+        if (link.getAttribute('href') && link.getAttribute('href').includes(path) && path !== "") {
             link.parentElement.classList.add('active');
         }
     });
 
-    // ==========================================
-    // 4. LÓGICA DE ROLES (FIREBASE)
-    // ==========================================
-    // Aquí es donde le decimos al menú qué enlaces mostrar según quién esté logueado.
+    // 6. Roles
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             try {
-                // Buscamos el documento del usuario en Firestore
                 const docSnap = await getDoc(doc(db, "users", user.uid));
-                
                 if (docSnap.exists()) {
-                    const rol = docSnap.data().rol || "usuario"; // Si no tiene rol, es "usuario" por defecto
-                    
+                    const rol = docSnap.data().rol || "usuario";
                     if (rol === "admin") {
-                        // --- SI ES ADMINISTRADOR ---
                         document.getElementById("menu-admin").style.display = "block";
-                        document.getElementById("menu-reportes").style.display = "block"; 
                     } else {
-                        // --- SI ES USUARIO NORMAL ---
                         document.getElementById("menu-usuario").style.display = "block";
-                        document.getElementById("menu-historial").style.display = "block"; 
                     }
                 }
             } catch (error) {
-                console.error("Error al obtener el rol del usuario:", error);
+                console.error("Error al obtener el rol:", error);
             }
         } else {
-            // Si no hay usuario logueado, lo expulsamos al login
-            window.location.replace("login.html");
+            window.location.replace(`${prefix}login.html`);
         }
     });
 
-    // ==========================================
-    // 5. CERRAR SESIÓN
-    // ==========================================
-    // Escucha el clic en el botón de cerrar sesión, destruye la sesión y redirige.
+    // 7. Cerrar Sesión
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
-            try {
-                await signOut(auth);
-                window.location.replace("login.html");
-            } catch (error) {
-                console.error("Error al cerrar sesión:", error);
-            }
+            await signOut(auth);
+            window.location.replace(`${prefix}login.html`);
         });
     }
 });
