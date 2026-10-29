@@ -354,7 +354,7 @@ FECHA DE FINALIZACION: 20 DE NOVIEMBRE
  
 ---
  
-## 🚀 División de Sprints (Estructura de Sprints Scrum - 2 semanas c/u)
+## División de Sprints (Estructura de Sprints Scrum - 2 semanas c/u)
  
 ### **Sprint 1: Configuración Inicial, Usuarios y Alta de Estacionamientos** *(Semanas 1 y 2)*
 
