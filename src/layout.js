@@ -5,8 +5,9 @@ import { doc, getDoc } from "firebase/firestore";
 document.addEventListener("DOMContentLoaded", () => {
     const sidebarContainer = document.getElementById('sidebar-container');
 
-    // Detectar subcarpeta
-    const isSubfolder = window.location.pathname.includes('mapa-estacionamiento');
+    // Detectar subcarpeta de forma robusta
+    const pathname = window.location.pathname;
+    const isSubfolder = pathname.includes('mapa-estacionamiento');
     const prefix = isSubfolder ? '../' : '';
 
     // 1. CREAR EL OVERLAY DIRECTAMENTE EN EL BODY (No dentro del menú)
@@ -15,15 +16,21 @@ document.addEventListener("DOMContentLoaded", () => {
     overlay.id = 'sidebarOverlay';
     document.body.appendChild(overlay);
 
-    // 2. INYECTAR EL MENÚ
+    // 2. INYECTAR EL MENÚ (Incluyendo opciones separadas para usuario y admin)
     if (sidebarContainer) {
         sidebarContainer.innerHTML = `
             <nav class="sidebar" id="sidebar">
                 <div class="sidebar-header">SmartPark IA</div>
                 <ul class="sidebar-menu">
                     <li id="menu-perfil"><a href="${prefix}perfil.html">Mi Perfil</a></li>
+                    
+                    <!-- Opciones exclusivas para Usuario -->
                     <li id="menu-usuario" style="display: none;"><a href="${prefix}mapa-estacionamiento/mapa.html">Mapa</a></li>
-                    <li id="menu-admin" style="display: none;"><a href="${prefix}admin.html">Usuarios</a></li>
+                    <li id="menu-reservar" style="display: none;"><a href="${prefix}reservar.html">Reservar Espacio</a></li>
+                    <li id="menu-reserva" style="display: none;"><a href="${prefix}ver-reserva.html">Ver Reserva</a></li>
+                    
+                    <!-- Opciones exclusivas para Administrador -->
+                    <li id="menu-admin" style="display: none;"><a href="${prefix}admin.html">Gestión de Usuarios</a></li>
                 </ul>
                 <div class="sidebar-footer">
                     <button id="logoutBtn" class="logout-btn">
@@ -60,12 +67,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const path = window.location.pathname.split("/").pop();
     const links = document.querySelectorAll('.sidebar-menu a');
     links.forEach(link => {
-        if (link.getAttribute('href') && link.getAttribute('href').includes(path) && path !== "") {
+        const href = link.getAttribute('href');
+        if (href && href.includes(path) && path !== "") {
             link.parentElement.classList.add('active');
         }
     });
 
-    // 6. Roles
+    // 6. Roles (Manejo de permisos y vistas)
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             try {
@@ -75,7 +83,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (rol === "admin") {
                         document.getElementById("menu-admin").style.display = "block";
                     } else {
+                        // Si es usuario regular, mostramos mapa, reservar y ver reserva
                         document.getElementById("menu-usuario").style.display = "block";
+                        document.getElementById("menu-reservar").style.display = "block";
+                        document.getElementById("menu-reserva").style.display = "block";
                     }
                 }
             } catch (error) {
