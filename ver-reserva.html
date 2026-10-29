@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Mi Reserva</title>
+    
+    <link rel="stylesheet" href="./css/perfil.css">
+    
+    <style>
+        /* Animación del carrito */
+        .parking-scene {
+            position: relative;
+            width: 120px;
+            height: 200px;
+            margin: 20px auto;
+            border: 2px dashed var(--border-line);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .car {
+            position: absolute;
+            width: 60px;
+            height: 100px;
+            background: #1a1a1a;
+            border-radius: 12px;
+            border: 2px solid var(--text-secondary);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+            animation: floatCar 3s ease-in-out infinite;
+        }
+        .car-windshield {
+            position: absolute; top: 15px; left: 10px; right: 10px; height: 25px;
+            background: rgba(255, 255, 255, 0.1); border-radius: 6px;
+        }
+        .car-headlights {
+            position: absolute; bottom: 5px; left: 10px; right: 10px; height: 4px;
+            background: #ffffff; border-radius: 4px; box-shadow: 0 0 10px #ffffff;
+        }
+        @keyframes floatCar {
+            0%, 100% { transform: translate(-50%, -50%); }
+            50% { transform: translate(-50%, -55%); }
+        }
+
+        /* =========================================
+           VENTANA MODAL (CONFIRMACIÓN)
+           ========================================= */
+        .custom-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            display: none; /* Oculto por defecto */
+            align-items: center;
+            justify-content: center;
+            z-index: 10000; /* Por encima de todo */
+        }
+
+        .custom-modal-overlay.active {
+            display: flex;
+        }
+
+        .custom-modal {
+            background: var(--card-surface);
+            border: 1px solid var(--border-line);
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            animation: scaleIn 0.3s ease;
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .custom-modal h3 {
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .custom-modal p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .modal-btn-cancel {
+            background: transparent;
+            color: var(--text-secondary);
+            border-color: var(--border-line);
+        }
+
+        .modal-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .modal-btn-confirm {
+            background: #ffffff;
+            color: #000000;
+            box-shadow: 0 0 15px var(--neon-glow);
+        }
+
+        .modal-btn-confirm:hover {
+            background: #e4e4e7;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. CONTENEDOR DEL MENÚ LATERAL -->
+    <div id="sidebar-container"></div>
+
+    <!-- 2. CONTENIDO PRINCIPAL -->
+    <div class="main-content">
+        <header class="navbar">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <span class="navbar-brand">Mi Reserva Activa</span>
+            </div>
+        </header>
+
+        <div class="container">
+            <h2>Detalle de Reserva</h2>
+            
+            <div class="profile-card" style="align-items: flex-start;">
+                <!-- Lado Izquierdo: Animación -->
+                <div class="avatar-container" style="width: 100%; max-width: 200px;">
+                    <div class="parking-scene">
+                        <div class="car">
+                            <div class="car-windshield"></div>
+                            <div class="car-headlights"></div>
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 15px;">
+                        Tu lugar está asegurado en el sistema.
+                    </p>
+                </div>
+
+                <!-- Lado Derecho: Datos -->
+                <div class="info-grid" style="flex: 1; width: 100%;">
+                    <p id="mensaje" style="color: var(--text-secondary); margin-bottom: 10px;">Buscando tu reserva activa...</p>
+
+                    <div id="detalleReserva" style="display: none; width: 100%;">
+                        
+                        <div class="info-group">
+                            <label>Estacionamiento / Zona</label>
+                            <p id="valEstacionamiento">-</p>
+                        </div>
+                        
+                        <div class="info-group">
+                            <label>Espacio / Cajón</label>
+                            <p id="valEspacio" style="font-size: 20px; font-weight: 800; color: var(--neon-cyan);">-</p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="info-group">
+                                <label>Fecha</label>
+                                <p id="valFecha">-</p>
+                            </div>
+                            <div class="info-group">
+                                <label>Horario</label>
+                                <p id="valHorario">-</p>
+                            </div>
+                        </div>
+
+                        <div class="info-group">
+                            <label>Estado de la reserva</label>
+                            <p id="valEstado" style="color: #10b981; font-weight: 700;">ACTIVA</p>
+                        </div>
+
+                        <!-- Botón que abre la modal -->
+                        <button id="btnAbrirModal" class="logout-btn" style="margin-top: 15px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                            Cancelar Reserva
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. VENTANA MODAL DE CONFIRMACIÓN -->
+    <div class="custom-modal-overlay" id="modalConfirmacion">
+        <div class="custom-modal">
+            <h3>¿Cancelar Reserva?</h3>
+            <p>Estás a punto de liberar tu cajón. Esta acción no se puede deshacer y otra persona podría ocuparlo.</p>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="btnCancelarModal">Volver atrás</button>
+                <button class="modal-btn modal-btn-confirm" id="btnConfirmarEliminar">Sí, cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. SCRIPTS -->
+    <script type="module" src="./src/layout.js"></script>
+    
+    <script type="module">
+        import { auth, db } from "./src/firebase/config.js";
+        import { onAuthStateChanged } from "firebase/auth";
+        import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
+        import { showToast } from "./src/toast.js";
+
+        // Elementos del DOM
+        const mensaje = document.getElementById("mensaje");
+        const detalleReserva = document.getElementById("detalleReserva");
+        
+        // Elementos del Modal
+        const modalConfirmacion = document.getElementById("modalConfirmacion");
+        const btnAbrirModal = document.getElementById("btnAbrirModal");
+        const btnCancelarModal = document.getElementById("btnCancelarModal");
+        const btnConfirmarEliminar = document.getElementById("btnConfirmarEliminar");
+
+        const valEstacionamiento = document.getElementById("valEstacionamiento");
+        const valEspacio = document.getElementById("valEspacio");
+        const valFecha = document.getElementById("valFecha");
+        const valHorario = document.getElementById("valHorario");
+        const valEstado = document.getElementById("valEstado");
+
+        let reservaIdActual = null;
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                try {
+                    const q = query(collection(db, "reservas"), where("uid", "==", user.uid));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        let reservaActiva = null;
+                        querySnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            if (data.estado && data.estado.toLowerCase() === "activa") {
+                                reservaActiva = { id: doc.id, ...data };
+                            }
+                        });
+
+                        if (reservaActiva) {
+                            reservaIdActual = reservaActiva.id;
+
+                            valEstacionamiento.textContent = reservaActiva.estacionamiento || "No especificado";
+                            valEspacio.textContent = reservaActiva.espacio || "No especificado";
+                            valFecha.textContent = reservaActiva.fecha || "No especificada";
+                            valHorario.textContent = reservaActiva.horario + (reservaActiva.duracion ? ` (${reservaActiva.duracion})` : "");
+                            valEstado.textContent = reservaActiva.estado.toUpperCase();
+
+                            mensaje.style.display = "none";
+                            detalleReserva.style.display = "block";
+                        } else {
+                            mensaje.innerHTML = `No tienes ninguna reserva activa en este momento.<br><br><a href="reservar.html" class="upload-btn" style="text-decoration:none;">Ir a Reservar</a>`;
+                        }
+                    } else {
+                        mensaje.innerHTML = `No tienes ninguna reserva activa en este momento.<br><br><a href="reservar.html" class="upload-btn" style="text-decoration:none;">Ir a Reservar</a>`;
+                    }
+                } catch (error) {
+                    console.error("Error al consultar reserva:", error);
+                    mensaje.textContent = "Error al cargar los datos de la reserva.";
+                }
+            } else {
+                window.location.replace("login.html");
+            }
+        });
+
+        // --- LÓGICA DE LA VENTANA MODAL ---
+        
+        // 1. Abrir modal al dar clic en "Cancelar Reserva"
+        if (btnAbrirModal) {
+            btnAbrirModal.addEventListener("click", () => {
+                if (!reservaIdActual) return;
+                modalConfirmacion.classList.add("active");
+            });
+        }
+
+        // 2. Cerrar modal al dar clic en "Volver atrás"
+        if (btnCancelarModal) {
+            btnCancelarModal.addEventListener("click", () => {
+                modalConfirmacion.classList.remove("active");
+            });
+        }
+
+        // 3. Ejecutar la cancelación al dar clic en "Sí, cancelar"
+        if (btnConfirmarEliminar) {
+            btnConfirmarEliminar.addEventListener("click", async () => {
+                if (!reservaIdActual) return;
+                
+                btnConfirmarEliminar.textContent = "Cancelando...";
+                btnConfirmarEliminar.disabled = true;
+
+                try {
+                    const reservaRef = doc(db, "reservas", reservaIdActual);
+                    // Cambiamos el estado a "cancelada"
+                    await updateDoc(reservaRef, { estado: "cancelada" });
+
+                    // Ocultamos la modal y mostramos el Toast de éxito
+                    modalConfirmacion.classList.remove("active");
+                    showToast("Tu reserva ha sido cancelada exitosamente.", "success");
+                    
+                    // Recargamos la página después de 1.5 segundos para que vea el estado vacío
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+
+                } catch (error) {
+                    console.error("Error al cancelar:", error);
+                    showToast("No se pudo cancelar la reserva.", "error");
+                    btnConfirmarEliminar.textContent = "Sí, cancelar";
+                    btnConfirmarEliminar.disabled = false;
+                    modalConfirmacion.classList.remove("active");
+                }
+            });
+        }
+    </script>
+</body>
+</html>

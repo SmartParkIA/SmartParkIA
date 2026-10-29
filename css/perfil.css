@@ -4,14 +4,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-    --bg-deep: #03060d;
-    --card-surface: rgba(15, 23, 42, 0.75);
-    --border-line: rgba(255, 255, 255, 0.1);
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --neon-cyan: #00f2fe;
-    --neon-blue: #0072ff;
-    --neon-glow: rgba(0, 242, 254, 0.25);
+    --bg-deep: #000000; /* Fondo negro puro */
+    --card-surface: rgba(20, 20, 20, 0.6); /* Cristal gris muy oscuro */
+    --border-line: rgba(255, 255, 255, 0.15); 
+    --text-primary: #ffffff; 
+    --text-secondary: #a1a1aa; 
+    
+    /* Los "neones" ahora son Blanco y Gris */
+    --neon-cyan: #ffffff;                   /* Blanco puro */
+    --neon-blue: #a1a1aa;                   /* Gris claro */
+    --neon-glow: rgba(255, 255, 255, 0.3);    /* Resplandor blanco */
 }
 
 * { 
