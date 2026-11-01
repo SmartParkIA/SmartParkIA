@@ -1,0 +1,24 @@
+# Dependencias de Node.js
+node_modules/
+**/node_modules/
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Credenciales privadas de Firebase
+**/serviceAccountKey*.json
+**/*serviceAccount*.json
+
+# Archivos generados
+dist/
+build/
+coverage/
+
+# Archivos temporales
+*.log
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
