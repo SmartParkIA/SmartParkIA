@@ -196,20 +196,8 @@
                             <p id="valEstado" style="color: #10b981; font-weight: 700;">ACTIVA</p>
                         </div>
 
-                        <!-- Botón que abre la modal -->
-                        <button id="btnAbrirModal" class="logout-btn" style="margin-top: 15px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                            Cancelar Reserva
-                        </button>
-                        <button id="btnFinalizarReserva" class="logout-btn" style="margin-top: 15px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                            Finalizar Reserva
-                        </button>
+                        <!-- Botón cancelar (componente React: src/components/cancelarReserva.jsx) -->
+                        <div id="cancelarReservaRoot"></div>
 
                     </div>
                 </div>
@@ -238,6 +226,7 @@
         import { onAuthStateChanged } from "firebase/auth";
         import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
         import { showToast } from "./src/toast.js";
+        import { montarCancelarReserva } from "./src/components/cancelarReserva.jsx";
 
         // Elementos del DOM
         const mensaje = document.getElementById("mensaje");
@@ -245,10 +234,8 @@
         
         // Elementos del Modal
         const modalConfirmacion = document.getElementById("modalConfirmacion");
-        const btnAbrirModal = document.getElementById("btnAbrirModal");
         const btnCancelarModal = document.getElementById("btnCancelarModal");
         const btnConfirmarEliminar = document.getElementById("btnConfirmarEliminar");
-        const btnFinalizarReserva = document.getElementById("btnFinalizarReserva");
 
         const valEstacionamiento = document.getElementById("valEstacionamiento");
         const valEspacio = document.getElementById("valEspacio");
@@ -256,82 +243,18 @@
         const valHorario = document.getElementById("valHorario");
         const valEstado = document.getElementById("valEstado");
 
-        // ======================================
-// FINALIZAR RESERVA
-// ======================================
-
-if (btnFinalizarReserva) {
-
-    btnFinalizarReserva.addEventListener("click", async () => {
-
-        if (!reservaIdActual) {
-            showToast("No existe una reserva para finalizar.", "error");
-            return;
-        }
-
-
-        btnFinalizarReserva.textContent = "Finalizando...";
-        btnFinalizarReserva.disabled = true;
-
-
-        try {
-
-            const reservaRef = doc(
-                db,
-                "reservas",
-                reservaIdActual
-            );
-
-
-            await updateDoc(reservaRef, {
-
-                estado: "finalizada",
-
-                fechaFinalizacion: new Date().toISOString()
-
-            });
-
-
-            showToast(
-                "Tu reserva fue finalizada correctamente.",
-                "success"
-            );
-
-
-            setTimeout(() => {
-
-                window.location.reload();
-
-            },1500);
-
-
-
-        } catch(error){
-
-            console.error(
-                "Error al finalizar reserva:",
-                error
-            );
-
-
-            showToast(
-                "No se pudo finalizar la reserva.",
-                "error"
-            );
-
-
-            btnFinalizarReserva.textContent =
-                "Finalizar Reserva";
-
-
-            btnFinalizarReserva.disabled = false;
-
-        }
-
-    });
-
-}
         let reservaIdActual = null;
+
+        // Botón "Cancelar Reserva" (componente React) -> abre la modal
+        montarCancelarReserva(
+            document.getElementById("cancelarReservaRoot"),
+            {
+                onClick: () => {
+                    if (!reservaIdActual) return;
+                    modalConfirmacion.classList.add("active");
+                }
+            }
+        );
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -394,22 +317,14 @@ if (btnFinalizarReserva) {
 
         // --- LÓGICA DE LA VENTANA MODAL ---
         
-        // 1. Abrir modal al dar clic en "Cancelar Reserva"
-        if (btnAbrirModal) {
-            btnAbrirModal.addEventListener("click", () => {
-                if (!reservaIdActual) return;
-                modalConfirmacion.classList.add("active");
-            });
-        }
-
-        // 2. Cerrar modal al dar clic en "Volver atrás"
+        // 1. Cerrar modal al dar clic en "Volver atrás"
         if (btnCancelarModal) {
             btnCancelarModal.addEventListener("click", () => {
                 modalConfirmacion.classList.remove("active");
             });
         }
 
-        // 3. Ejecutar la cancelación al dar clic en "Sí, cancelar"
+        // 2. Ejecutar la cancelación al dar clic en "Sí, cancelar"
         if (btnConfirmarEliminar) {
             btnConfirmarEliminar.addEventListener("click", async () => {
                 if (!reservaIdActual) return;
