@@ -12,7 +12,75 @@ import {
 } from "firebase/firestore";
 
 
+const buscadorEstacionamiento = document.getElementById(
+"buscarEstacionamiento"
+);
 
+const buscadorEstado = document.getElementById(
+"buscarEstado"
+);
+
+
+function filtrarHistorial(){
+
+
+let estacionamiento = buscadorEstacionamiento.value.toLowerCase();
+
+let estado = buscadorEstado.value;
+
+
+
+let tarjetas = document.querySelectorAll(
+".historial-card"
+);
+
+
+
+tarjetas.forEach(card=>{
+
+
+let texto = card.innerText.toLowerCase();
+
+
+let coincideEstacionamiento =
+texto.includes(estacionamiento);
+
+
+
+let coincideEstado =
+estado === "" ||
+texto.includes(estado.toLowerCase());
+
+
+
+if(coincideEstacionamiento && coincideEstado){
+
+    card.style.display="block";
+
+}else{
+
+    card.style.display="none";
+
+}
+
+
+});
+
+
+}
+
+
+
+buscadorEstacionamiento.addEventListener(
+"input",
+filtrarHistorial
+);
+
+
+buscadorEstado.addEventListener(
+"change",
+filtrarHistorial
+);
 const historialContainer = 
 document.getElementById("historialContainer");
 
