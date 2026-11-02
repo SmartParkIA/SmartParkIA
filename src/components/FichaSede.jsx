@@ -4,6 +4,7 @@ import { tieneUbicacion, urlComoLlegar } from '../services/sedesUtils.js'
 import { Bahias, ChipEstado } from './IndicadoresSede.jsx'
 import './FichaSede.css'
 
+
 const moneda = new Intl.NumberFormat('es-MX', {
   style: 'currency',
   currency: 'MXN',
@@ -16,7 +17,7 @@ const moneda = new Intl.NumberFormat('es-MX', {
  * Muestra enseguida lo que ya se sabe (nombre, disponibilidad, ubicación)
  * y carga en segundo plano horarios, precios y reglas (tarea 026).
  */
-export default function FichaSede({ sede, onVolver, onVerMapa }) {
+export default function FichaSede({ sede, onVolver, onVerMapa, onReservar }) {
   const [detalle, setDetalle] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(null)
@@ -69,6 +70,17 @@ export default function FichaSede({ sede, onVolver, onVerMapa }) {
       <p className="ficha__disponibles">
         <strong>{sede.espaciosDisponibles}</strong> de {sede.espaciosTotales} lugares disponibles
       </p>
+
+      {onReservar && (
+        <button
+          type="button"
+          className="boton-primario"
+          onClick={onReservar}
+          disabled={sede.espaciosDisponibles <= 0}
+        >
+          {sede.espaciosDisponibles <= 0 ? 'Sin lugares disponibles' : 'Reservar lugar'}
+        </button>
+      )}
 
       <section className="ficha__seccion">
         <h3>Ubicación</h3>
