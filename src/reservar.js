@@ -1,74 +1,51 @@
-import { auth, db } from "./firebase/config.js";
-import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
-import { showToast } from "./toast.js";
+document.addEventListener('DOMContentLoaded', () => {
+    // Establecer la fecha actual por defecto en el input de fecha
+    const today = new Date().toISOString().split('T')[0];
+    const inputFecha = document.getElementById('fecha');
+    if (inputFecha) inputFecha.value = today;
+});
 
-document.addEventListener("DOMContentLoaded", () => {
-    const reservaForm = document.getElementById("reservaForm");
-    const btnReservar = document.getElementById("btnReservar");
+document.getElementById('reservaForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
 
-    if (reservaForm) {
-        reservaForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
+    // Recopilar únicamente los datos del espacio y horario
+    const datosReserva = {
+        estacionamiento: document.getElementById('estacionamiento').value,
+        espacio: document.getElementById('espacio').value,
+        fecha: document.getElementById('fecha').value,
+        horario: document.getElementById('horario').value,
+        duracion: document.getElementById('duracion').value
+    };
 
-            const user = auth.currentUser;
-            if (!user) {
-                showToast("No has iniciado sesión.", "error");
-                return;
-            }
+    const btnReservar = document.getElementById('btnReservar');
+    btnReservar.disabled = true;
+    btnReservar.textContent = "Procesando reserva...";
 
-            const estacionamiento = document.getElementById("estacionamiento").value;
-            const espacio = document.getElementById("espacio").value;
-            const fecha = document.getElementById("fecha").value;
-            const horario = document.getElementById("horario").value;
-            const duracion = document.getElementById("duracion").value;
-
-            if (btnReservar) {
-                btnReservar.textContent = "Procesando...";
-                btnReservar.disabled = true;
-            }
-
-            try {
-                // 1. Validar que no tenga otra activa
-                const qUser = query(collection(db, "reservas"), where("uid", "==", user.uid), where("estado", "==", "activa"));
-                const snapUser = await getDocs(qUser);
-                if (!snapUser.empty) {
-                    showToast("Ya tienes una reserva activa. Cancélala primero.", "error");
-                    if (btnReservar) { btnReservar.textContent = "Confirmar Reserva"; btnReservar.disabled = false; }
-                    return;
-                }
-
-                // 2. Validar que el cajón no esté ocupado
-                const qCajon = query(collection(db, "reservas"), where("espacio", "==", espacio), where("estado", "==", "activa"));
-                const snapCajon = await getDocs(qCajon);
-                if (!snapCajon.empty) {
-                    showToast("Ese cajón ya está ocupado por otra persona.", "error");
-                    if (btnReservar) { btnReservar.textContent = "Confirmar Reserva"; btnReservar.disabled = false; }
-                    return;
-                }
-
-                // 3. Guardar en Firestore TODOS los campos
-                await addDoc(collection(db, "reservas"), {
-                    uid: user.uid,
-                    estacionamiento: estacionamiento,
-                    espacio: espacio,
-                    fecha: fecha,
-                    horario: horario,
-                    duracion: duracion + " horas",
-                    estado: "activa", // <-- ESTE ES EL QUE FALTABA EN LA PRUEBA
-                    fechaCreacion: new Date().toISOString()
-                });
-
-                showToast("¡Reserva confirmada con éxito!", "success");
-                
-                setTimeout(() => {
-                    window.location.href = "ver-reserva.html"; 
-                }, 1500);
-
-            } catch (error) {
-                console.error("Error al reservar:", error);
-                showToast("Ocurrió un error al guardar la reserva.", "error");
-                if (btnReservar) { btnReservar.textContent = "Confirmar Reserva"; btnReservar.disabled = false; }
-            }
+    try {
+        // Enviar al servidor (el servidor identifica al usuario mediante su sesión/token)
+        const respuesta = await fetch('/api/crear-reserva', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include', // Importante para enviar cookies de sesión si las usas
+            body: JSON.stringify(datosReserva)
         });
+
+        const resultado = await respuesta.json();
+
+        if (respuesta.ok) {
+            alert('¡Reserva confirmada con éxito! Se ha enviado un correo de confirmación a tu cuenta.');
+            window.location.href = 'perfil.html';
+        } else {
+            alert('Error: ' + (resultado.mensaje || 'No se pudo procesar la reserva'));
+            btnReservar.disabled = false;
+            btnReservar.textContent = "Confirmar Reserva";
+        }
+    } catch (error) {
+        console.error('Error de red:', error);
+        alert('Hubo un error de conexión al intentar procesar la reserva.');
+        btnReservar.disabled = false;
+        btnReservar.textContent = "Confirmar Reserva";
     }
 });
