@@ -148,6 +148,7 @@
 
         <div class="container">
             <h2>Detalle de Reserva</h2>
+            <div id="listaReservas"></div>
             
             <div class="profile-card" style="align-items: flex-start;">
                 <!-- Lado Izquierdo: Animación -->
@@ -203,6 +204,12 @@
                             </svg>
                             Cancelar Reserva
                         </button>
+                        <button id="btnFinalizarReserva" class="logout-btn" style="margin-top: 15px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Finalizar Reserva
+                        </button>
 
                     </div>
                 </div>
@@ -221,6 +228,7 @@
             </div>
         </div>
     </div>
+    
 
     <!-- 4. SCRIPTS -->
     <script type="module" src="./src/layout.js"></script>
@@ -240,6 +248,7 @@
         const btnAbrirModal = document.getElementById("btnAbrirModal");
         const btnCancelarModal = document.getElementById("btnCancelarModal");
         const btnConfirmarEliminar = document.getElementById("btnConfirmarEliminar");
+        const btnFinalizarReserva = document.getElementById("btnFinalizarReserva");
 
         const valEstacionamiento = document.getElementById("valEstacionamiento");
         const valEspacio = document.getElementById("valEspacio");
@@ -247,6 +256,81 @@
         const valHorario = document.getElementById("valHorario");
         const valEstado = document.getElementById("valEstado");
 
+        // ======================================
+// FINALIZAR RESERVA
+// ======================================
+
+if (btnFinalizarReserva) {
+
+    btnFinalizarReserva.addEventListener("click", async () => {
+
+        if (!reservaIdActual) {
+            showToast("No existe una reserva para finalizar.", "error");
+            return;
+        }
+
+
+        btnFinalizarReserva.textContent = "Finalizando...";
+        btnFinalizarReserva.disabled = true;
+
+
+        try {
+
+            const reservaRef = doc(
+                db,
+                "reservas",
+                reservaIdActual
+            );
+
+
+            await updateDoc(reservaRef, {
+
+                estado: "finalizada",
+
+                fechaFinalizacion: new Date().toISOString()
+
+            });
+
+
+            showToast(
+                "Tu reserva fue finalizada correctamente.",
+                "success"
+            );
+
+
+            setTimeout(() => {
+
+                window.location.reload();
+
+            },1500);
+
+
+
+        } catch(error){
+
+            console.error(
+                "Error al finalizar reserva:",
+                error
+            );
+
+
+            showToast(
+                "No se pudo finalizar la reserva.",
+                "error"
+            );
+
+
+            btnFinalizarReserva.textContent =
+                "Finalizar Reserva";
+
+
+            btnFinalizarReserva.disabled = false;
+
+        }
+
+    });
+
+}
         let reservaIdActual = null;
 
         onAuthStateChanged(auth, async (user) => {
@@ -256,28 +340,46 @@
                     const querySnapshot = await getDocs(q);
 
                     if (!querySnapshot.empty) {
+                        let reservasUsuario = [];
                         let reservaActiva = null;
                         querySnapshot.forEach((doc) => {
                             const data = doc.data();
-                            if (data.estado && data.estado.toLowerCase() === "activa") {
-                                reservaActiva = { id: doc.id, ...data };
-                            }
-                        });
+                            const reserva = {
+                                id: doc.id,
+                                ...data
+                            };
+                            reservasUsuario.push(reserva);
+                            // Guardamos solamente la activa
+                            if(data.estado && data.estado.toLowerCase() === "activa"){
+                                reservaActiva = reserva;
+                            }});
 
                         if (reservaActiva) {
-                            reservaIdActual = reservaActiva.id;
 
-                            valEstacionamiento.textContent = reservaActiva.estacionamiento || "No especificado";
-                            valEspacio.textContent = reservaActiva.espacio || "No especificado";
-                            valFecha.textContent = reservaActiva.fecha || "No especificada";
-                            valHorario.textContent = reservaActiva.horario + (reservaActiva.duracion ? ` (${reservaActiva.duracion})` : "");
-                            valEstado.textContent = reservaActiva.estado.toUpperCase();
+    reservaIdActual = reservaActiva.id;
 
-                            mensaje.style.display = "none";
-                            detalleReserva.style.display = "block";
-                        } else {
-                            mensaje.innerHTML = `No tienes ninguna reserva activa en este momento.<br><br><a href="reservar.html" class="upload-btn" style="text-decoration:none;">Ir a Reservar</a>`;
-                        }
+    valEstacionamiento.textContent = reservaActiva.estacionamiento || "No especificado";
+
+    valEspacio.textContent = reservaActiva.espacio || "No especificado";
+
+    valFecha.textContent = reservaActiva.fecha || "No especificada";
+
+    valHorario.textContent =
+    reservaActiva.horario +
+    (reservaActiva.duracion 
+    ? ` (${reservaActiva.duracion})` 
+    : "");
+
+
+    valEstado.textContent =
+    reservaActiva.estado.toUpperCase();
+
+
+    mensaje.style.display = "none";
+
+    detalleReserva.style.display = "block";
+
+}
                     } else {
                         mensaje.innerHTML = `No tienes ninguna reserva activa en este momento.<br><br><a href="reservar.html" class="upload-btn" style="text-decoration:none;">Ir a Reservar</a>`;
                     }

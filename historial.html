@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>SmartPark IA - Historial</title>
+
+<link rel="stylesheet" href="./css/perfil.css">
+
+
+<style>
+
+.historial-card{
+    background: var(--card-surface);
+    border:1px solid var(--border-line);
+    border-radius:20px;
+    padding:25px;
+    margin-top:20px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.25);
+}
+
+
+.historial-card h3{
+    color:var(--text-primary);
+    margin-bottom:15px;
+
+}
+
+
+
+.historial-card p{
+    color:var(--text-secondary);
+    margin:10px 0;
+}
+
+
+
+.estado-finalizada{
+    color:#10b981;
+    font-weight:800;
+}
+
+
+
+.estado-cancelada{
+
+    color:#ef4444;
+    font-weight:800;
+
+}
+
+
+
+.badge{
+
+    display:inline-block;
+    padding:6px 14px;
+    border-radius:20px;
+    font-size:13px;
+
+    margin-top:10px;
+
+}
+
+
+
+</style>
+
+
+</head>
+
+
+<body>
+
+
+<div id="sidebar-container"></div>
+
+
+<div class="main-content">
+
+
+<header class="navbar">
+
+<div style="display:flex;align-items:center;gap:15px;">
+
+<button class="menu-toggle" id="menuToggle">
+☰
+</button>
+
+
+<span class="navbar-brand">
+Historial de Reservaciones
+</span>
+
+
+</div>
+
+</header>
+
+
+
+<div class="container">
+
+
+<h2>
+Mis Reservaciones Anteriores
+</h2>
+
+
+
+<div class="profile-card">
+
+
+<div class="info-grid" style="width:100%;">
+
+
+<div id="historialContainer">
+
+
+<p style="color:var(--text-secondary);">
+Cargando historial...
+</p>
+
+
+</div>
+
+
+</div>
+
+
+</div>
+
+
+</div>
+
+
+
+</div>
+
+
+
+<script type="module" src="./src/layout.js"></script>
+
+
+<script type="module" src="historial.js"></script>
+
+
+
+</body>
+
+</html>

@@ -28,6 +28,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     <li id="menu-usuario" style="display: none;"><a href="${prefix}mapa-estacionamiento/mapa.html">Mapa</a></li>
                     <li id="menu-reservar" style="display: none;"><a href="${prefix}reservar.html">Reservar Espacio</a></li>
                     <li id="menu-reserva" style="display: none;"><a href="${prefix}ver-reserva.html">Ver Reserva</a></li>
+                    <li id="menu-historial" style="display: none;"><a href="${prefix}historial.html">Historial de Reservaciones</a></li>
+                    
                     
                     <!-- Opciones exclusivas para Administrador -->
                     <li id="menu-admin" style="display: none;"><a href="${prefix}admin.html">Gestión de Usuarios</a></li>
@@ -87,6 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         document.getElementById("menu-usuario").style.display = "block";
                         document.getElementById("menu-reservar").style.display = "block";
                         document.getElementById("menu-reserva").style.display = "block";
+                        document.getElementById("menu-historial").style.display = "block";
                     }
                 }
             } catch (error) {
