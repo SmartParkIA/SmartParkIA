@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark - Panel de Administración</title>
+    
+    <!-- Tailwind CSS y FontAwesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- CSS del Layout Global y tu CSS del mapa -->
+    <link rel="stylesheet" href="../css/perfil.css">
+    <link rel="stylesheet" href="../CSS/mapa.css">
+    
+    <style>
+        body { 
+            background-color: var(--bg-deep) !important; 
+            display: flex; 
+            height: 100vh; 
+            overflow: hidden;
+            margin: 0;
+        }
+        .main-content { 
+            height: 100vh; 
+            overflow-y: auto; 
+            background: var(--bg-deep) !important;
+        }
+    </style>
+</head>
+<body class="text-white selection:bg-white selection:text-black">
+
+    <!-- 1. MENÚ LATERAL -->
+    <div id="sidebar-container"></div>
+
+    <!-- 2. CONTENIDO PRINCIPAL -->
+    <div class="main-content">
+        
+        <!-- Header de Administrador (Con botones de control de tráfico y simulación) -->
+        <header class="bg-[#000000] border-b border-[#242424] px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-2xl">
+            <div class="flex items-center space-x-4">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                
+                <div class="bg-white text-black font-black text-xl px-3 py-1.5 rounded-none tracking-tighter shadow-md">
+                    SMARTPARK
+                </div>
+                <div class="h-6 w-[1px] bg-[#242424] hidden sm:block"></div>
+                <div>
+                    <h1 class="text-base font-semibold tracking-wide text-white uppercase">Parking Ops (Panel Admin)</h1>
+                    <p class="text-xs text-[#757575]">Monitoreo de espacios, control de tráfico y analítica predictiva</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-2 bg-[#121212] px-3.5 py-1.5 rounded-full border border-[#242424]">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-xs font-medium text-[#E0E0E0] tracking-wide uppercase">Admin En Vivo</span>
+                </div>
+                <!-- Botón de control de simulación de tráfico -->
+                <button id="toggleSimBtn" class="bg-white hover:bg-[#E0E0E0] text-black px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all flex items-center space-x-2 active:scale-95">
+                    <i class="fa-solid fa-pause text-xs" id="simIcon"></i>
+                    <span id="simText">Pausar Tráfico</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Layout Principal -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+            
+            <!-- Panel Izquierdo: Métricas y Controles de Admin -->
+            <section class="lg:col-span-1 flex flex-col space-y-5">
+                
+                <!-- Tarjeta de Métricas de Capacidad Global -->
+                <div class="bg-[#121212] border border-[#242424] rounded-2xl p-5 shadow-2xl">
+                    <h2 class="text-xs font-bold text-[#757575] uppercase tracking-widest mb-4 flex items-center justify-between">
+                        <span>Métricas de Capacidad</span>
+                        <i class="fa-solid fa-chart-simple text-white"></i>
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-5">
+                        <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                            <span class="text-[10px] uppercase font-bold text-[#757575] block mb-0.5">Total Capacidad</span>
+                            <span id="statTotal" class="text-2xl font-semibold text-white">0</span>
+                        </div>
+                        <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                            <span class="text-[10px] uppercase font-bold text-emerald-400 block mb-0.5">Libres</span>
+                            <span id="statFree" class="text-2xl font-bold text-white">0</span>
+                        </div>
+                        <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                            <span class="text-[10px] uppercase font-bold text-rose-400 block mb-0.5">Ocupados</span>
+                            <span id="statOccupied" class="text-2xl font-semibold text-white">0</span>
+                        </div>
+                        <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424]">
+                            <span class="text-[10px] uppercase font-bold text-yellow-400 block mb-0.5">Reservados</span>
+                            <span id="statReserved" class="text-2xl font-semibold text-white">0</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-[#E0E0E0] mb-2">
+                            <span class="text-[#757575] uppercase text-[10px] font-bold tracking-wider">Ocupación General</span>
+                            <span id="occupancyRate" class="font-bold">0%</span>
+                        </div>
+                        <div class="w-full bg-[#000000] h-2 rounded-full overflow-hidden p-0.5 border border-[#242424]">
+                            <div id="occupancyBar" class="bg-white h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de Recomendación IA para Admin -->
+                <div class="bg-[#121212] border border-[#242424] rounded-2xl p-5 shadow-2xl space-y-3">
+                    <h2 class="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-white"></i>
+                        <span>IA Predictiva (Admin)</span>
+                    </h2>
+                    <div class="bg-[#000000] p-3.5 rounded-xl border border-[#242424] space-y-2 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[#757575]">Riesgo de Saturación:</span>
+                            <span id="adminRiskLevel" class="font-bold text-emerald-400">Bajo (Óptimo)</span>
+                        </div>
+                        <div class="pt-2 border-t border-[#242424]">
+                            <p id="adminAdviceText" class="text-[11px] text-[#757575] leading-relaxed">
+                                Monitoreando operaciones en tiempo real...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controles de Administración del Plano -->
+                <div class="bg-[#121212] border border-[#242424] rounded-2xl p-5 shadow-2xl flex-1 flex flex-col justify-between">
+                    <div>
+                        <h2 class="text-xs font-bold text-[#757575] uppercase tracking-widest mb-4 flex items-center justify-between">
+                            <span>Herramientas Admin</span>
+                            <i class="fa-solid fa-gear text-[#757575]"></i>
+                        </h2>
+                        
+                        <div class="space-y-2.5 mb-4">
+                            <div class="bg-[#000000] border border-[#242424] rounded-xl p-3.5 text-xs text-[#E0E0E0] leading-relaxed">
+                                <div class="flex items-start space-x-2">
+                                    <i class="fa-solid fa-hand-pointer text-white mt-0.5"></i>
+                                    <span><strong>Clic en cajón:</strong> Al hacer clic cambias su estado institucional (Libre ➔ Ocupado ➔ Reservado).</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-[#242424] flex flex-col space-y-2">
+                        <button id="resetParkingBtn" class="w-full bg-[#000000] hover:bg-[#242424] text-white border border-[#242424] py-2.5 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-center space-x-2 active:scale-98">
+                            <i class="fa-solid fa-rotate-right text-xs"></i>
+                            <span>Reiniciar Distribución Maestro</span>
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Panel Derecho: Mapa en Vivo + Simulador de Hora + Historial Analítico -->
+            <section class="lg:col-span-3 flex flex-col space-y-6">
+                
+                <!-- Mapa Visualizador Maestro -->
+                <div class="bg-[#121212] border border-[#242424] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
+                    <div class="bg-[#000000] px-5 py-3.5 border-b border-[#242424] flex flex-col sm:flex-row justify-between items-center gap-3 z-10">
+                        <div class="flex items-center space-x-3">
+                            <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                            <span class="text-xs font-bold text-white uppercase tracking-widest">Plano Operativo Maestro</span>
+                        </div>
+
+                        <!-- Filtros rápidos de zona -->
+                        <div class="flex items-center gap-1.5 bg-[#121212] p-1 rounded-xl border border-[#242424] text-[11px]">
+                            <button class="zone-filter-btn px-3 py-1 rounded-lg bg-white text-black font-semibold transition" data-zone="todos">Todos</button>
+                            <button class="zone-filter-btn px-3 py-1 rounded-lg text-[#757575] hover:text-white transition" data-zone="general">General</button>
+                            <button class="zone-filter-btn px-3 py-1 rounded-lg text-[#757575] hover:text-white transition" data-zone="vip">VIP</button>
+                        </div>
+                    </div>
+
+                    <!-- Simulador de Hora del Día (Slider) -->
+                    <div class="bg-[#000000] px-5 py-3 border-b border-[#242424] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                        <div class="flex items-center gap-2 text-[#757575]">
+                            <i class="fa-solid fa-clock text-white"></i>
+                            <span>Simulador de Horario Predictivo:</span>
+                            <strong id="sliderTimeLabel" class="text-white font-mono bg-[#121212] px-2 py-0.5 rounded border border-[#242424]">12:00 hrs</strong>
+                        </div>
+                        <div class="w-full sm:w-64 flex items-center gap-2">
+                            <span class="text-[10px] text-[#757575]">07:00</span>
+                            <input id="timeSimulatorSlider" type="range" min="7" max="22" value="12" class="w-full accent-white cursor-pointer">
+                            <span class="text-[10px] text-[#757575]">22:00</span>
+                        </div>
+                    </div>
+
+                    <div class="relative flex-1 w-full bg-[#121212] flex items-center justify-center overflow-hidden min-h-[400px]">
+                        <canvas id="parkingCanvas" class="w-full h-full block cursor-pointer"></canvas>
+                        
+                        <div id="spotTooltip" class="absolute hidden pointer-events-none bg-black/95 border border-[#333333] text-white text-xs px-3.5 py-2.5 rounded-xl shadow-2xl z-20 backdrop-blur transition-opacity duration-150">
+                            <span id="tooltipTitle" class="font-bold block text-white tracking-wider mb-0.5">Cajón A-01</span>
+                            <span id="tooltipStatus" class="text-[#757575]">Estado: Libre</span>
+                        </div>
+
+                        <!-- Notificación Toast Admin -->
+                        <div id="toastNotification" class="absolute top-4 right-4 hidden bg-black/95 border border-white/50 text-white text-xs px-4 py-3 rounded-xl shadow-2xl z-30 backdrop-blur flex items-center gap-3 transition-all duration-300 translate-y-[-10px] opacity-0">
+                            <div class="w-6 h-6 rounded-full bg-white/25 text-white flex items-center justify-center">
+                                <i class="fa-solid fa-info text-xs"></i>
+                            </div>
+                            <div>
+                                <span class="font-bold block text-white" id="toastTitle">Estado Actualizado</span>
+                                <span class="text-[#757575] text-[11px]" id="toastDesc">Cambio registrado en el sistema maestro.</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-[#000000] px-5 py-3 border-t border-[#242424] flex justify-between items-center text-xs text-[#757575]">
+                        <span><i class="fa-solid fa-car text-white mr-1"></i> Vehículos circulando en simulación: <span id="carCount" class="font-bold text-white font-mono">10</span></span>
+                        <span class="font-mono text-[11px]">60 FPS • ADMIN ENGINE</span>
+                    </div>
+                </div>
+
+                <!-- Apartado de Consultas Analíticas e Histórico (Tareas 067 y 068) -->
+                <div class="bg-[#121212] border border-[#242424] rounded-2xl p-6 shadow-2xl space-y-5">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#242424] pb-4">
+                        <div>
+                            <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-white"></i>
+                                <span>Consultas Analíticas de Demanda y Ocupación Histórica</span>
+                            </h2>
+                            <p class="text-xs text-[#757575] mt-0.5">Procesamiento de registros para identificar días y franjas horarias con mayor demanda operativa.</p>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <select id="filterDay" class="bg-[#000000] text-xs text-white border border-[#242424] px-3 py-2 rounded-xl outline-none focus:border-white transition">
+                                <option value="todos">Todos los Días</option>
+                                <option value="Lunes">Lunes</option>
+                                <option value="Martes">Martes</option>
+                                <option value="Miércoles">Miércoles</option>
+                                <option value="Jueves">Jueves</option>
+                                <option value="Viernes">Viernes</option>
+                                <option value="Sábado">Sábado</option>
+                            </select>
+                            <button id="runQueryBtn" class="bg-white hover:bg-[#E0E0E0] text-black text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2">
+                                <i class="fa-solid fa-filter text-[10px]"></i>
+                                <span>Filtrar</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-[#000000] p-4 rounded-xl border border-[#242424] flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] uppercase font-bold text-[#757575] block mb-1">Día con Mayor Demanda Operativa</span>
+                                <span id="analyticsPeakDay" class="text-sm font-bold text-white">Viernes</span>
+                            </div>
+                            <span class="text-xs bg-[#121212] border border-[#242424] px-2.5 py-1 rounded-lg text-emerald-400 font-bold">Pico: 94%</span>
+                        </div>
+                        <div class="bg-[#000000] p-4 rounded-xl border border-[#242424] flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] uppercase font-bold text-[#757575] block mb-1">Franja Horaria Crítica</span>
+                                <span id="analyticsPeakHour" class="text-sm font-bold text-white">14:00 - 17:00 hrs</span>
+                            </div>
+                            <span class="text-xs bg-[#121212] border border-[#242424] px-2.5 py-1 rounded-lg text-rose-400 font-bold">Alta Afluencia</span>
+                        </div>
+                    </div>
+
+                    <div class="border border-[#242424] rounded-xl overflow-hidden bg-[#000000]">
+                        <div class="px-4 py-3 bg-[#121212] border-b border-[#242424] text-xs font-semibold text-[#757575] flex justify-between">
+                            <span>REGISTROS HISTÓRICOS PROCESADOS</span>
+                            <span id="recordCount" class="font-mono text-[11px]">8 registros</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-[#000000] text-[#757575] uppercase text-[10px] border-b border-[#242424]">
+                                    <tr>
+                                        <th class="px-4 py-3">Día</th>
+                                        <th class="px-4 py-3">Franja Horaria</th>
+                                        <th class="px-4 py-3">Afluencia Promedio</th>
+                                        <th class="px-4 py-3">Nivel Operativo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="analyticsTableBody" class="divide-y divide-[#242424] text-[#E0E0E0]">
+                                    <!-- Dinámico por JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="../src/layout.js"></script>
+    <script type="module" src="../Js/mapa-admin.js"></script>
+    
+</body>
+</html>

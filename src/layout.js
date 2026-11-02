@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     <!-- Opciones exclusivas para Administrador -->
                     <li id="menu-admin" style="display: none;"><a href="${prefix}admin.html">Gestión de Usuarios</a></li>
+                    <li id="menu-admin" style="display: none;"><a href="${prefix}admin.html">mapa-admin</a></li>
                 </ul>
                 <div class="sidebar-footer">
                     <button id="logoutBtn" class="logout-btn">
