@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "nodemailer": "^10.3.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -22,5 +25,18 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "oxlint": "^1.81.0",
     "vite": "^8.3.0"
-  }
+  },
+  "description": "Se desarrolla aplicación multiplataforma para los servicios privados de acceso publico. Se requiere el control de la gestión inteligente de estacionamientos, con detección de espacios ocupados o disponibles en tiempo real y seguimiento de reservas.",
+  "main": "vite.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SmartParkIA/SmartParkIA.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SmartParkIA/SmartParkIA/issues"
+  },
+  "homepage": "https://github.com/SmartParkIA/SmartParkIA#readme"
 }
