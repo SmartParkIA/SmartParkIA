@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Reservar Espacio</title>
+    
+    <!-- Usamos el CSS global unificado (Blanco y Negro) -->
+    <link rel="stylesheet" href="./css/perfil.css">
+    
+    <style>
+        /* Estilos específicos para los inputs del formulario */
+        .form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .form-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        .form-input:focus {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 10px var(--neon-glow);
+        }
+
+        /* Para que el icono del calendario/reloj se vea blanco */
+        ::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+
+        /* Animación del carrito adaptada al tema oscuro */
+        .parking-scene {
+            position: relative;
+            width: 120px;
+            height: 200px;
+            margin: 20px auto;
+            border: 2px dashed var(--border-line);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .car {
+            position: absolute;
+            width: 60px;
+            height: 100px;
+            background: #1a1a1a;
+            border-radius: 12px;
+            border: 2px solid var(--text-secondary);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+            animation: floatCar 3s ease-in-out infinite;
+        }
+        .car-windshield {
+            position: absolute; top: 15px; left: 10px; right: 10px; height: 25px;
+            background: rgba(255, 255, 255, 0.1); border-radius: 6px;
+        }
+        .car-headlights {
+            position: absolute; bottom: 5px; left: 10px; right: 10px; height: 4px;
+            background: #ffffff; border-radius: 4px; box-shadow: 0 0 10px #ffffff;
+        }
+        @keyframes floatCar {
+            0%, 100% { transform: translate(-50%, -50%); }
+            50% { transform: translate(-50%, -55%); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. CONTENEDOR DEL MENÚ LATERAL -->
+    <div id="sidebar-container"></div>
+
+    <!-- 2. CONTENIDO PRINCIPAL -->
+    <div class="main-content">
+        
+        <!-- Navbar Unificado -->
+        <header class="navbar">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <span class="navbar-brand">Nueva Reserva</span>
+            </div>
+        </header>
+
+        <div class="container">
+            <h2>Reservar Espacio</h2>
+            
+            <div class="profile-card" style="align-items: stretch;">
+                
+                <!-- Lado Izquierdo: Animación y Tips -->
+                <div class="avatar-container" style="width: 100%; max-width: 250px;">
+                    <div class="parking-scene">
+                        <div class="car">
+                            <div class="car-windshield"></div>
+                            <div class="car-headlights"></div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 30px; text-align: left;">
+                        <h4 style="color: var(--text-primary); margin-bottom: 10px; font-size: 14px;">💡 Proceso de Reserva</h4>
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; padding-left: 15px; position: relative;">
+                                <span style="position: absolute; left: 0; color: var(--neon-cyan);">•</span>
+                                Al confirmar, el cajón quedará asignado exclusivamente a tu cuenta.
+                            </li>
+                            <li style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; padding-left: 15px; position: relative;">
+                                <span style="position: absolute; left: 0; color: var(--neon-cyan);">•</span>
+                                Tu lugar se mantendrá apartado hasta finalizar el horario seleccionado.
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Lado Derecho: Formulario (Usando info-grid) -->
+                <div class="info-grid" style="flex: 1; width: 100%;">
+                    
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 10px;">
+                        Completa los datos para asegurar tu lugar antes de llegar.
+                    </p>
+
+                    <form id="reservaForm" style="display: flex; flex-direction: column; gap: 15px;">
+                        
+                        <div class="info-group" style="padding: 15px;">
+                            <label class="form-label" for="estacionamiento">Estacionamiento / Zona</label>
+                            <input type="text" id="estacionamiento" class="form-input" value="SmartPark Central - Zona A" required>
+                        </div>
+
+                        <div class="info-group" style="padding: 15px;">
+                            <label class="form-label" for="espacio">Cajón / Espacio Disponible</label>
+                            <input type="text" id="espacio" class="form-input" placeholder="Ej. Cajón #A-12" required>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="info-group" style="padding: 15px;">
+                                <label class="form-label" for="fecha">Fecha</label>
+                                <input type="date" id="fecha" class="form-input" required>
+                            </div>
+                            <div class="info-group" style="padding: 15px;">
+                                <label class="form-label" for="horario">Hora de Inicio</label>
+                                <input type="time" id="horario" class="form-input" required>
+                            </div>
+                        </div>
+
+                        <div class="info-group" style="padding: 15px;">
+                            <label class="form-label" for="duracion">Duración (Horas)</label>
+                            <input type="number" id="duracion" class="form-input" min="1" max="12" value="2" required>
+                        </div>
+
+                        <button type="submit" id="btnReservar" class="upload-btn" style="width: 100%; margin-top: 10px;">
+                            Confirmar Reserva
+                        </button>
+                    </form>
+
+                    <div style="margin-top: 20px; text-align: center;">
+                        <a href="perfil.html" style="color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-secondary)'">
+                            Volver al perfil
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. SCRIPTS -->
+    <script type="module" src="./src/layout.js"></script>
+    <script type="module" src="./src/reservar.js"></script>
+
+</body>
+</html>

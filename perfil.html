@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark IA - Mi Perfil</title>
+    <link rel="stylesheet" href="./css/perfil.css">
+        <!-- Fuente Premium -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Aquí se inyecta el menú lateral -->
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <!-- Barra superior -->
+        <header class="navbar">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <span class="navbar-brand">SmartPark IA</span>
+            </div>
+        </header>
+
+        <div class="container">
+            <h2>Mi Información Personal</h2>
+            <div class="profile-card">
+                <div class="avatar-container">
+                    <img id="profileImage" src="https://via.placeholder.com/130" alt="Avatar" class="avatar">
+                    <br>
+                    <label for="fileInput" class="upload-btn">Subir Foto</label>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+                <div class="info-grid">
+                    <div class="info-group">
+                        <label>Nombres y Apellidos</label>
+                        <p id="userName">Cargando...</p>
+                    </div>
+                    <div class="info-group">
+                        <label>Correo Electrónico</label>
+                        <p id="userEmail">Cargando...</p>
+                    </div>
+                    <div class="info-group">
+                        <label>Rol en el Sistema</label>
+                        <p id="userRole">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="./src/layout.js"></script>
+    <script type="module" src="./src/perfil.js"></script>
+</body>
+</html>
