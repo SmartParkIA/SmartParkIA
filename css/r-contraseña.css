@@ -1,315 +1,501 @@
+/* ==========================================================================
+   VARIABLES DE DISEÑO Y COLOR (SmartPark IA Neón Theme)
+   ========================================================================== */
+:root {
+    --bg-deep: #03060d;                     /* Negro profundo para el fondo */
+    --card-surface: rgba(15, 23, 42, 0.82); /* Cristal semi-transparente */
+    --border-line: rgba(255, 255, 255, 0.12);/* Bordes iluminados sutiles */
+    --text-primary: #f8fafc;                /* Texto principal en blanco */
+    --text-secondary: #94a3b8;              /* Texto secundario en gris azulado */
+    
+    /* Colores Acento Neón */
+    --neon-cyan: #00f2fe;                   /* Azul cian tecnológico */
+    --neon-blue: #0072ff;                   /* Azul eléctrico de alto impacto */
+    --neon-glow: rgba(0, 242, 254, 0.35);    /* Brillo neón para sombras */
+}
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background-color: #000000; /* Negro Uber */
-            color: #FFFFFF;
-            min-height: 100vh; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
+/* Forzar interfaz oscura nativa en navegadores */
+html {
+    color-scheme: dark;
+}
 
-        /* Contenedor Principal Split-Screen */
-        .container {
-            display: flex;
-            flex-direction: row;
-            width: 100%;
-            max-width: 920px;
-            background: #121212; /* Tarjeta gris carbono */
-            border-radius: 16px;
-            border: 1px solid #262626;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-        }
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
-        /* Lado Izquierdo: Animación + Mensaje + Tips */
-        .left-panel {
-            flex: 1.1;
-            padding: 36px;
-            background-color: #181818;
-            border-right: 1px solid #262626;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
+/* ==========================================================================
+   ESTILOS GLOBALES Y FONDO CON LUCES FLUIDAS
+   ========================================================================== */
+body { 
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+    background-color: var(--bg-deep);
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    min-height: 100vh; 
+    margin: 0; 
+    color: var(--text-primary);
+    position: relative;
+    overflow: hidden;
+    padding: 20px;
+}
 
-        .left-panel h1 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
-            color: #FFFFFF;
-        }
+/* Luces orbe neón flotantes en segundo plano */
+body::before,
+body::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+}
 
-        .left-panel p.subtitle {
-            font-size: 14px;
-            color: #A6A6A6;
-            margin-bottom: 20px;
-            line-height: 1.4;
-        }
+body::before {
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, var(--neon-cyan) 0%, rgba(0, 242, 254, 0) 70%);
+    top: 8%;
+    left: 12%;
+    animation: floatCyan 10s ease-in-out infinite alternate;
+}
 
-        /* --- ANIMACIÓN CSS: CARRO ESTACIONÁNDOSE --- */
-        .parking-scene {
-            width: 100%;
-            height: 110px;
-            background-color: #121212;
-            border: 1px dashed #333333;
-            border-radius: 12px;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 24px;
-        }
+body::after {
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle, var(--neon-blue) 0%, rgba(0, 114, 255, 0) 70%);
+    bottom: 8%;
+    right: 12%;
+    animation: floatBlue 12s ease-in-out infinite alternate;
+}
 
-        /* Cajón de Estacionamiento marcado con "P" */
-        .parking-spot {
-            position: absolute;
-            right: 25px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 100px;
-            height: 60px;
-            border: 2px dashed #444444;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+@keyframes floatCyan {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(80px, 50px) scale(1.2); }
+    100% { transform: translate(-40px, 90px) scale(0.9); }
+}
 
-        .parking-spot::after {
-            content: "P";
-            font-size: 22px;
-            font-weight: 800;
-            color: #333333;
-        }
+@keyframes floatBlue {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-90px, -60px) scale(1.15); }
+    100% { transform: translate(50px, -40px) scale(0.95); }
+}
 
-        /* Vehículo SmartPark IA */
-        .car {
-            position: absolute;
-            top: 50%;
-            left: -120px;
-            width: 80px;
-            height: 42px;
-            background-color: #FFFFFF; /* Auto Blanco estilo Uber */
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
-            animation: parkCar 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-        }
+/* ==========================================================================
+   CONTENEDOR PRINCIPAL SPLIT-SCREEN (GLASSMORPHISM)
+   ========================================================================== */
+.container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 920px;
+    background: var(--card-surface);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 20px;
+    border: 1px solid var(--border-line);
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px var(--neon-glow);
+    transition: box-shadow 0.3s ease;
+}
 
-        /* Parabrisas y detalles del vehículo */
-        .car-windshield {
-            position: absolute;
-            right: 14px;
-            top: 7px;
-            width: 22px;
-            height: 28px;
-            background-color: #121212;
-            border-radius: 4px;
-        }
+.container:hover {
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(0, 242, 254, 0.5);
+}
 
-        /* Luces delanteras (IA) */
-        .car-headlights {
-            position: absolute;
-            right: 2px;
-            top: 4px;
-            width: 4px;
-            height: 34px;
-            background-color: #3B82F6; /* Brillo Azul Tecnológico IA */
-            border-radius: 2px;
-            box-shadow: 2px 0 8px #3B82F6;
-        }
+/* ==========================================================================
+   PANEL IZQUIERDO: Animación del Auto y Tips
+   ========================================================================== */
+.left-panel {
+    flex: 1.1;
+    padding: 36px;
+    background: rgba(10, 16, 28, 0.6);
+    border-right: 1px solid var(--border-line);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
 
-        /* Ruedas */
-        .wheel {
-            position: absolute;
-            width: 14px;
-            height: 6px;
-            background-color: #000000;
-            border-radius: 2px;
-        }
-        .wheel-tl { top: -3px; left: 14px; }
-        .wheel-tr { top: -3px; right: 14px; }
-        .wheel-bl { bottom: -3px; left: 14px; }
-        .wheel-br { bottom: -3px; right: 14px; }
+.left-panel h1 {
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #ffffff 30%, var(--neon-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.4));
+}
 
-        /* Keyframes de la animación */
-        @keyframes parkCar {
-            0% {
-                left: -100px;
-                transform: translateY(-50%) rotate(0deg);
-            }
-            35% {
-                left: calc(100% - 240px);
-                transform: translateY(-50%) rotate(0deg);
-            }
-            55% {
-                left: calc(100% - 130px);
-                transform: translateY(-50%) rotate(5deg);
-            }
-            75%, 90% {
-                left: calc(100% - 115px);
-                transform: translateY(-50%) rotate(0deg);
-            }
-            100% {
-                left: 110%;
-                transform: translateY(-50%) rotate(0deg);
-            }
-        }
-        /* --- FIN ANIMACIÓN --- */
+.left-panel p.subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
 
-        .tips-container {
-            background-color: #121212;
-            padding: 18px;
-            border-radius: 12px;
-            border: 1px solid #262626;
-        }
+/* --- ANIMACIÓN CSS: CARRO ESTACIONÁNDOSE CON LUCES NEÓN --- */
+.parking-scene {
+    width: 100%;
+    height: 110px;
+    background-color: rgba(3, 7, 18, 0.8);
+    border: 1px dashed rgba(0, 242, 254, 0.3);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 24px;
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+}
 
-        .tips-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: #FFFFFF;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+.parking-spot {
+    position: absolute;
+    right: 25px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100px;
+    height: 60px;
+    border: 2px dashed rgba(0, 242, 254, 0.5);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
-        .tips-list {
-            list-style: none;
-        }
+.parking-spot::after {
+    content: "P";
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-glow);
+}
 
-        .tips-list li {
-            font-size: 12px;
-            color: #CCCCCC;
-            margin-bottom: 8px;
-            line-height: 1.4;
-            display: flex;
-            align-items: flex-start;
-        }
+.car {
+    position: absolute;
+    top: 50%;
+    left: -120px;
+    width: 80px;
+    height: 42px;
+    background: linear-gradient(135deg, #ffffff, #e2e8f0);
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+    animation: parkCar 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
 
-        .tips-list li:last-child {
-            margin-bottom: 0;
-        }
+.car-windshield {
+    position: absolute;
+    right: 14px;
+    top: 7px;
+    width: 22px;
+    height: 28px;
+    background-color: #03060d;
+    border-radius: 4px;
+}
 
-        .tips-list li::before {
-            content: "•";
-            color: #FFFFFF;
-            font-weight: bold;
-            font-size: 14px;
-            margin-right: 8px;
-            line-height: 1;
-        }
+.car-headlights {
+    position: absolute;
+    right: 2px;
+    top: 4px;
+    width: 4px;
+    height: 34px;
+    background-color: var(--neon-cyan);
+    border-radius: 2px;
+    box-shadow: 4px 0 12px var(--neon-cyan);
+}
 
-        /* Lado Derecho: Formulario */
-        .right-panel {
-            flex: 1;
-            padding: 36px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
+.wheel {
+    position: absolute;
+    width: 14px;
+    height: 6px;
+    background-color: #000000;
+    border-radius: 2px;
+}
+.wheel-tl { top: -3px; left: 14px; }
+.wheel-tr { top: -3px; right: 14px; }
+.wheel-bl { bottom: -3px; left: 14px; }
+.wheel-br { bottom: -3px; right: 14px; }
 
-        .right-panel h2 {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #FFFFFF;
-        }
+@keyframes parkCar {
+    0% {
+        left: -100px;
+        transform: translateY(-50%) rotate(0deg);
+    }
+    35% {
+        left: calc(100% - 240px);
+        transform: translateY(-50%) rotate(0deg);
+    }
+    55% {
+        left: calc(100% - 130px);
+        transform: translateY(-50%) rotate(5deg);
+    }
+    75%, 90% {
+        left: calc(100% - 115px);
+        transform: translateY(-50%) rotate(0deg);
+    }
+    100% {
+        left: 110%;
+        transform: translateY(-50%) rotate(0deg);
+    }
+}
 
-        .right-panel p.desc {
-            font-size: 13px;
-            color: #A6A6A6;
-            margin-bottom: 24px;
-            line-height: 1.4;
-        }
+.tips-container {
+    background-color: rgba(3, 7, 18, 0.7);
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid var(--border-line);
+}
 
-        label { 
-            display: block; 
-            margin-top: 12px; 
-            font-weight: 500; 
-            color: #E2E2E2; 
-            font-size: 13px; 
-        }
+.tips-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
 
-        input { 
-            width: 100%; 
-            padding: 12px; 
-            margin-top: 6px; 
-            background-color: #1F1F1F;
-            border: 1px solid #333333; 
-            border-radius: 8px; 
-            box-sizing: border-box; 
-            color: #FFFFFF;
-            font-size: 15px;
-            outline: none;
-            transition: border-color 0.2s, background-color 0.2s;
-        }
+.tips-list {
+    list-style: none;
+}
 
-        input:focus {
-            border-color: #FFFFFF;
-            background-color: #262626;
-        }
+.tips-list li {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+    display: flex;
+    align-items: flex-start;
+}
 
-        button[type="submit"] { 
-            width: 100%; 
-            background-color: #FFFFFF; 
-            color: #000000; 
-            border: none; 
-            padding: 14px; 
-            margin-top: 24px; 
-            border-radius: 8px; 
-            font-size: 15px; 
-            font-weight: 700; 
-            cursor: pointer; 
-            transition: background-color 0.2s, transform 0.1s;
-        }
+.tips-list li:last-child {
+    margin-bottom: 0;
+}
 
-        button[type="submit"]:hover { 
-            background-color: #E2E2E2; 
-        }
+.tips-list li::before {
+    content: "•";
+    color: var(--neon-cyan);
+    font-weight: bold;
+    font-size: 14px;
+    margin-right: 8px;
+    line-height: 1;
+}
 
-        button[type="submit"]:active {
-            transform: scale(0.98);
-        }
+/* ==========================================================================
+   PANEL DERECHO: Formulario de Entradas y Botones Modernos
+   ========================================================================== */
+.right-panel {
+    flex: 1;
+    padding: 36px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 
-        #mensaje { 
-            margin-top: 16px; 
-            text-align: center; 
-            font-weight: 500; 
-            font-size: 13px; 
-        }
+.right-panel h2 {
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+}
 
-        .link { 
-            text-align: center; 
-            margin-top: 24px; 
-            font-size: 13px; 
-        }
+.right-panel p.desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.4;
+}
 
-        .link a { 
-            color: #FFFFFF; 
-            text-decoration: underline; 
-            font-weight: 500;
-        }
+label { 
+    display: block; 
+    margin-top: 14px; 
+    font-weight: 600; 
+    color: var(--text-secondary); 
+    font-size: 11px; 
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
 
-        .link a:hover { 
-            color: #A6A6A6; 
-        }
+/* Inputs Modernizados con destello Neón al enfocar */
+input { 
+    width: 100%; 
+    padding: 12px 16px; 
+    margin-top: 6px; 
+    background: rgba(3, 7, 18, 0.65);
+    border: 1px solid var(--border-line); 
+    border-radius: 10px; 
+    color: #fff;
+    box-sizing: border-box; 
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    color-scheme: dark;
+}
 
-        /* Adaptación móvil */
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            .left-panel {
-                border-right: none;
-                border-bottom: 1px solid #262626;
-                padding: 28px;
-            }
-            .right-panel {
-                padding: 28px;
-            }
-        }
+input::placeholder {
+    color: rgba(148, 163, 184, 0.5);
+}
+
+input:hover {
+    border-color: rgba(0, 242, 254, 0.3);
+    background: rgba(3, 7, 18, 0.8);
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 16px var(--neon-glow), inset 0 0 8px rgba(0, 242, 254, 0.1);
+    background: rgba(3, 7, 18, 0.95);
+    transform: translateY(-1px);
+}
+
+/* Botón Futurista Neón */
+button[type="submit"] { 
+    position: relative;
+    width: 100%; 
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan)); 
+    color: #03060d; 
+    font-weight: 800;
+    border: none; 
+    padding: 14px; 
+    margin-top: 26px; 
+    border-radius: 10px; 
+    font-size: 15px; 
+    cursor: pointer; 
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 242, 254, 0.3);
+    overflow: hidden;
+}
+
+button[type="submit"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s ease;
+}
+
+button[type="submit"]:hover::before {
+    left: 100%;
+}
+
+button[type="submit"]:hover { 
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 25px rgba(0, 242, 254, 0.6);
+    filter: brightness(1.1);
+}
+
+button[type="submit"]:active {
+    transform: translateY(0) scale(0.99);
+}
+
+#mensaje { 
+    margin-top: 18px; 
+    text-align: center; 
+    font-weight: 600; 
+    font-size: 13px; 
+}
+
+/* Enlaces Inferiores Centrados */
+.link { 
+    text-align: center; 
+    margin-top: 22px; 
+    font-size: 13px; 
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.link a { 
+    color: var(--neon-cyan); 
+    text-decoration: none; 
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.link a:hover { 
+    text-decoration: underline;
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+/* Adaptación Móvil */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+    .left-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--border-line);
+        padding: 28px;
+    }
+    .right-panel {
+        padding: 28px;
+    }
+}
+/* ==========================================================================
+   7. ADAPTACIÓN RESPONSIVE AVANZADA (Móviles y Tablets)
+   ========================================================================== */
+
+/* Pantallas medianas (Tablets y Laptops pequeñas) */
+@media (max-width: 960px) {
+    .container {
+        max-width: 90%;
+        margin: 20px;
+    }
+}
+
+/* Pantallas pequeñas (Celulares) */
+@media (max-width: 768px) {
+    body {
+        padding: 12px;
+        align-items: flex-start; /* Permite desplazamiento vertical natural si el contenido es largo */
+        overflow-y: auto;
+    }
+
+    .container {
+        flex-direction: column; /* Apila el panel izquierdo y derecho verticalmente */
+        max-width: 100%;
+        width: 100%;
+        margin: 10px 0;
+    }
+
+    .left-panel {
+        padding: 24px 20px;
+        border-right: none;
+        border-bottom: 1px solid var(--border-line);
+    }
+
+    .right-panel {
+        padding: 24px 20px;
+    }
+
+    /* Ajustar tamaño de textos principales en móvil */
+    .left-panel h1 {
+        font-size: 22px;
+    }
+
+    .right-panel h2 {
+        font-size: 20px;
+    }
+
+    /* Reducir la altura de la animación en celulares para que no ocupe toda la pantalla */
+    .parking-scene {
+        height: 90px;
+        margin-bottom: 16px;
+    }
+}
