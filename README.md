@@ -14,7 +14,7 @@ Desarrollar una aplicacion multiplataforma de gestion de estacionamientos, los s
 
 • Barrera Perez Marco Antonio
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Equipo de desarrollo
 
 • Melgar Angeles Gabriela Sarahi
 
@@ -687,4 +687,3 @@ FECHA DE FINALIZACION: 20 DE NOVIEMBRE
   * Estadísticas con gráficas
 
   * Uso multiplataforma
- 
