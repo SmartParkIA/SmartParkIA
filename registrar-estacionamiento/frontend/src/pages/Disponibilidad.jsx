@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+
 import {
   Activity,
   ArrowLeft,
@@ -8,65 +9,88 @@ import {
   CircleParking,
   Clock,
   Radio,
-  RefreshCw,
   Wifi,
   WifiOff
 } from "lucide-react";
 
 import {
-  conectarMQTT,
-  desconectarMQTT,
-  publicarDisponibilidad
-} from "../services/mqttService";
+  collection,
+  onSnapshot
+} from "firebase/firestore";
+
+import { db } from "../firebase";
 
 import "../styles/Disponibilidad.css";
 
-const espaciosIniciales = Array.from({ length: 12 }, (_, index) => ({
-  id: index + 1,
-  estado: index < 5 ? "ocupado" : "libre",
-  actualizado: null
-}));
-
 function Disponibilidad() {
-  const [espacios, setEspacios] = useState(espaciosIniciales);
+  const [espacios, setEspacios] = useState([]);
   const [conexion, setConexion] = useState("conectando");
   const [ultimoMensaje, setUltimoMensaje] = useState(null);
-  const [publicando, setPublicando] = useState(false);
 
   useEffect(() => {
-    const cliente = conectarMQTT(
-      (datos) => {
-        if (
-          !Number.isInteger(datos.spaceId) ||
-          !["libre", "ocupado"].includes(datos.status)
-        ) {
-          console.warn("Actualización de espacio inválida:", datos);
-          return;
+    const referencia = collection(db, "lugares");
+
+    const cancelarSuscripcion = onSnapshot(
+      referencia,
+      (snapshot) => {
+        const espaciosFirebase = snapshot.docs
+          .map((documento) => {
+            const datos = documento.data();
+
+            // Ignorar documentos que no representan cajones
+            if (
+              typeof datos.ocupado !== "boolean" &&
+              typeof datos.estado !== "string"
+            ) {
+              return null;
+            }
+
+            const ocupado =
+              typeof datos.ocupado === "boolean"
+                ? datos.ocupado
+                : datos.estado === "ocupado";
+
+            const fecha = datos.ultimaActualizacion;
+
+            return {
+              id: documento.id,
+              estado: ocupado ? "ocupado" : "libre",
+              distancia: datos.distancia ?? null,
+              actualizado:
+                fecha?.toDate
+                  ? fecha.toDate()
+                  : fecha
+                    ? new Date(fecha)
+                    : null
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.id.localeCompare(b.id));
+
+        setEspacios(espaciosFirebase);
+        setConexion("conectado");
+
+        const fechas = espaciosFirebase
+          .map((espacio) => espacio.actualizado)
+          .filter(
+            (fecha) =>
+              fecha instanceof Date &&
+              !Number.isNaN(fecha.getTime())
+          );
+
+        if (fechas.length > 0) {
+          setUltimoMensaje(
+            new Date(Math.max(...fechas.map((fecha) => fecha.getTime())))
+          );
         }
-
-        setEspacios((anteriores) =>
-          anteriores.map((espacio) =>
-            espacio.id === datos.spaceId
-              ? {
-                  ...espacio,
-                  estado: datos.status,
-                  actualizado: datos.updatedAt || new Date().toISOString()
-                }
-              : espacio
-          )
-        );
-
-        setUltimoMensaje(new Date());
       },
-      (estado) => {
-        setConexion(estado);
+      (error) => {
+        console.error("Error escuchando Firestore:", error);
+        setConexion("error");
       }
     );
 
-    return () => {
-      cliente.end(true);
-      desconectarMQTT();
-    };
+    return () => cancelarSuscripcion();
   }, []);
 
   const total = espacios.length;
@@ -81,47 +105,16 @@ function Disponibilidad() {
     ? Math.round((ocupados / total) * 100)
     : 0;
 
-  async function simularCambio(espacio) {
-    if (conexion !== "conectado") {
-      alert("Primero debes conectar con HiveMQ.");
-      return;
-    }
-
-    const nuevoEstado =
-      espacio.estado === "libre" ? "ocupado" : "libre";
-
-    const mensaje = {
-      spaceId: espacio.id,
-      status: nuevoEstado,
-      updatedAt: new Date().toISOString(),
-      source: "SmartParkIA-simulador"
-    };
-
-    setPublicando(true);
-
-    try {
-      await publicarDisponibilidad(mensaje);
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setPublicando(false);
-    }
-  }
-
-  function simularTodos() {
-    const disponibles = espacios.filter(
-      (espacio) => espacio.estado === "libre"
-    );
-
-    const siguiente = disponibles[0] || espacios[0];
-
-    if (siguiente) {
-      simularCambio(siguiente);
-    }
-  }
-
   function regresar() {
     window.location.href = "/";
+  }
+
+  function nombreCajon(id) {
+    const coincidencia = id.match(/^cajon_(\d+)$/i);
+
+    return coincidencia
+      ? `Cajón ${coincidencia[1]}`
+      : id;
   }
 
   return (
@@ -138,7 +131,11 @@ function Disponibilidad() {
           </div>
         </div>
 
-        <button className="disp-volver" onClick={regresar}>
+        <button
+          className="disp-volver"
+          onClick={regresar}
+          type="button"
+        >
           <ArrowLeft size={17} />
           Regresar
         </button>
@@ -167,12 +164,10 @@ function Disponibilidad() {
 
             <span>
               {conexion === "conectado"
-                ? "Conectado a HiveMQ"
+                ? "Conectado a Firebase"
                 : conexion === "conectando"
-                ? "Conectando..."
-                : conexion === "reconectando"
-                ? "Reconectando..."
-                : "Desconectado"}
+                  ? "Conectando con Firebase..."
+                  : "Error de conexión"}
             </span>
           </div>
         </div>
@@ -187,7 +182,7 @@ function Disponibilidad() {
               <h3>Estacionamiento Centro</h3>
               <p>
                 <Activity size={14} />
-                Monitoreo mediante protocolo MQTT
+                Monitoreo mediante sensores IoT y MQTT
               </p>
             </div>
           </div>
@@ -227,7 +222,9 @@ function Disponibilidad() {
           <div className="disp-panel-cabecera">
             <div>
               <h3>Mapa de espacios</h3>
-              <p>Estado individual de cada cajón de estacionamiento.</p>
+              <p>
+                Estado real de los cajones registrados en Firebase.
+              </p>
             </div>
 
             <div className="disp-leyenda">
@@ -257,40 +254,38 @@ function Disponibilidad() {
 
           <div className="disp-grid">
             {espacios.map((espacio) => (
-              <button
+              <article
                 key={espacio.id}
                 className={`espacio espacio-${espacio.estado}`}
-                onClick={() => simularCambio(espacio)}
-                disabled={conexion !== "conectado" || publicando}
-                title={`Espacio ${espacio.id}: ${espacio.estado}. Pulsa para simular un cambio.`}
               >
                 <CarFront size={29} />
 
-                <strong>
-                  E-{String(espacio.id).padStart(2, "0")}
-                </strong>
+                <strong>{nombreCajon(espacio.id)}</strong>
 
                 <span>
-                  {espacio.estado === "libre" ? "DISPONIBLE" : "OCUPADO"}
+                  {espacio.estado === "libre"
+                    ? "DISPONIBLE"
+                    : "OCUPADO"}
                 </span>
-              </button>
+
+                {espacio.distancia !== null && (
+                  <small>
+                    {espacio.distancia} cm
+                  </small>
+                )}
+              </article>
             ))}
           </div>
 
-          <div className="disp-acciones">
-            <button
-              className="disp-boton"
-              onClick={simularTodos}
-              disabled={conexion !== "conectado" || publicando}
-            >
-              <RefreshCw size={17} />
-              Simular cambio de espacio
-            </button>
-
-            <span className="disp-ayuda">
-              Pulsa un espacio para cambiar su estado mediante MQTT.
-            </span>
-          </div>
+          {espacios.length === 0 && (
+            <div className="disp-actividad">
+              <p>
+                {conexion === "error"
+                  ? "No se pudieron consultar los espacios."
+                  : "Todavía no hay cajones registrados en Firestore."}
+              </p>
+            </div>
+          )}
         </section>
 
         <section className="disp-actividad">
@@ -301,13 +296,13 @@ function Disponibilidad() {
 
           <p>
             {ultimoMensaje
-              ? `Última actualización recibida: ${ultimoMensaje.toLocaleTimeString()}`
-              : "Esperando mensajes del broker MQTT..."}
+              ? `Última actualización del sensor: ${ultimoMensaje.toLocaleTimeString()}`
+              : "Esperando la primera actualización del sensor..."}
           </p>
 
           <small>
             <Radio size={14} />
-            Protocolo MQTT · Suscripción activa cuando hay conexión
+            ESP32 · HiveMQ MQTT · Firebase Firestore
           </small>
         </section>
 

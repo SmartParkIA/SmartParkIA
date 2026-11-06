@@ -3,6 +3,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const mqtt = require("mqtt");
 const { db, FieldValue } = require("./firebaseAdmin");
 
 const app = express();
@@ -10,13 +11,142 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.json({
-    mensaje: "API de SmartParkIA conectada con Firebase"
+const PORT = process.env.PORT || 3001;
+
+// ==========================================
+// 1. CONFIGURACIÓN MQTT
+// ==========================================
+
+const MQTT_BROKER =
+  process.env.MQTT_BROKER_URL || "mqtt://broker.hivemq.com:1883";
+
+const MQTT_TOPIC =
+  process.env.MQTT_TOPIC || "smartpark/cajones/+/estado";
+
+let mqttConectado = false;
+
+const clienteMQTT = mqtt.connect(MQTT_BROKER, {
+  clientId: `smartpark_backend_${Math.random().toString(16).slice(2, 10)}`,
+  clean: true,
+  connectTimeout: 10000,
+  reconnectPeriod: 5000,
+  keepalive: 60
+});
+
+clienteMQTT.on("connect", () => {
+  console.log("Conectado al broker HiveMQ.");
+
+  clienteMQTT.subscribe(MQTT_TOPIC, { qos: 0 }, (error) => {
+    if (error) {
+      console.error("Error al suscribirse a MQTT:", error.message);
+      mqttConectado = false;
+      return;
+    }
+
+    mqttConectado = true;
+    console.log("Suscripción MQTT activa:", MQTT_TOPIC);
   });
 });
 
-// Registrar estacionamiento en Firestore
+clienteMQTT.on("reconnect", () => {
+  mqttConectado = false;
+  console.log("Reconectando con HiveMQ...");
+});
+
+clienteMQTT.on("offline", () => {
+  mqttConectado = false;
+  console.log("Cliente MQTT desconectado.");
+});
+
+clienteMQTT.on("error", (error) => {
+  mqttConectado = false;
+  console.error("Error MQTT:", error.message);
+});
+
+// ==========================================
+// 2. RECIBIR DATOS DEL ESP32 Y GUARDAR EN FIRESTORE
+// ==========================================
+
+clienteMQTT.on("message", async (topic, payload) => {
+  try {
+    const datos = JSON.parse(payload.toString());
+
+    // Obtener el identificador del cajón desde el tópico
+    const coincidencia = topic.match(
+      /^smartpark\/cajones\/([^/]+)\/estado$/
+    );
+
+    if (!coincidencia) {
+      console.warn("Tópico MQTT no reconocido:", topic);
+      return;
+    }
+
+    const cajonId = coincidencia[1];
+
+    // Validar que el JSON corresponda con el tópico
+    if (datos.cajonId !== cajonId) {
+      console.warn("El cajonId no coincide con el tópico.");
+      return;
+    }
+
+    if (
+      typeof datos.ocupado !== "boolean" ||
+      typeof datos.distancia !== "number" ||
+      !Number.isFinite(datos.distancia) ||
+      datos.distancia < 0
+    ) {
+      console.warn("Datos del sensor inválidos:", datos);
+      return;
+    }
+
+    const estado = datos.ocupado ? "ocupado" : "disponible";
+
+    const actualizacion = {
+      ocupado: datos.ocupado,
+      distancia: datos.distancia,
+      estado,
+      ultimaActualizacion: FieldValue.serverTimestamp()
+    };
+
+    // Actualizar el documento existente sin borrar otros campos
+    await db
+      .collection("lugares")
+      .doc(cajonId)
+      .set(actualizacion, { merge: true });
+
+    console.log(
+      `Firestore actualizado: ${cajonId} - ${estado} - ${datos.distancia} cm`
+    );
+
+  } catch (error) {
+    console.error("Error procesando mensaje MQTT:", error.message);
+  }
+});
+
+// ==========================================
+// 3. API GENERAL
+// ==========================================
+
+app.get("/", (req, res) => {
+  res.json({
+    mensaje: "API de SmartParkIA conectada con Firebase y HiveMQ",
+    mqtt: mqttConectado ? "conectado" : "desconectado"
+  });
+});
+
+// Estado de la conexión MQTT
+app.get("/api/mqtt/estado", (req, res) => {
+  res.json({
+    conectado: mqttConectado,
+    broker: MQTT_BROKER,
+    topico: MQTT_TOPIC
+  });
+});
+
+// ==========================================
+// 4. REGISTRAR ESTACIONAMIENTO
+// ==========================================
+
 app.post("/api/estacionamientos", async (req, res) => {
   try {
     const {
@@ -104,8 +234,14 @@ app.post("/api/estacionamientos", async (req, res) => {
       mensaje: "Estacionamiento registrado correctamente.",
       estacionamiento: {
         id: documento.id,
-        ...nuevoEstacionamiento,
-        fecha_registro: new Date().toISOString()
+        nombre: nuevoEstacionamiento.nombre,
+        direccion: nuevoEstacionamiento.direccion,
+        ciudad: nuevoEstacionamiento.ciudad,
+        capacidad: capacidadNumero,
+        hora_apertura,
+        hora_cierre,
+        telefono: nuevoEstacionamiento.telefono,
+        estado: "activo"
       }
     });
 
@@ -118,7 +254,10 @@ app.post("/api/estacionamientos", async (req, res) => {
   }
 });
 
-// Consultar estacionamientos de Firestore
+// ==========================================
+// 5. CONSULTAR ESTACIONAMIENTOS
+// ==========================================
+
 app.get("/api/estacionamientos", async (req, res) => {
   try {
     const consulta = await db
@@ -142,9 +281,25 @@ app.get("/api/estacionamientos", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
+// ==========================================
+// 6. INICIAR SERVIDOR
+// ==========================================
 
-app.listen(PORT, () => {
+const servidor = app.listen(PORT, () => {
   console.log(`Servidor activo en http://localhost:${PORT}`);
-  console.log("Conectado a Firebase Firestore");
+  console.log("Firebase Firestore preparado.");
 });
+
+// Cierre ordenado
+function cerrarServidor() {
+  console.log("Cerrando conexiones...");
+
+  clienteMQTT.end(true);
+
+  servidor.close(() => {
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", cerrarServidor);
+process.on("SIGTERM", cerrarServidor);
