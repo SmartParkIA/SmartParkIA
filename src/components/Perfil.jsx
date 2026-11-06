@@ -122,10 +122,19 @@ export default function Perfil() {
           <Link to="/estacionamientos" onClick={() => setSidebarOpen(false)}>
             <FaParking /> Estacionamientos
           </Link>
+             <Link to="/VerReserva" onClick={() => setSidebarOpen(false)}>
+              <FaCog /> ver reservas
+            </Link>
+             
+             <Link to="/Historial" onClick={() => setSidebarOpen(false)}>
+              <FaCog /> Historial
+            </Link>
           {userData?.rol === "admin" && (
             <Link to="/admin" onClick={() => setSidebarOpen(false)}>
               <FaCog /> Admin
             </Link>
+          
+            
           )}
         </nav>
 
