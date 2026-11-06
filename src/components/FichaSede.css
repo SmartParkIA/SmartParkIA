@@ -1,0 +1,88 @@
+/* Ficha técnica de una sede. Usa las variables de color de .estacionamientos
+   (negro, grises y blanco), con valores de respaldo por si se usa fuera de él. */
+.ficha {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
+  color: var(--blanco, #fff);
+}
+
+.ficha__acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.ficha__acciones button {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--blanco, #fff);
+  border: 1px solid var(--borde-fuerte, #333);
+  border-radius: 999px;
+  font: 600 0.85rem 'Inter', sans-serif;
+  cursor: pointer;
+}
+.ficha__acciones button:hover { border-color: var(--gris, #757575); }
+.ficha__acciones .ficha__mapa { background: var(--blanco, #fff); color: var(--negro, #000); border-color: var(--blanco, #fff); }
+
+.ficha__cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ficha__cabecera h2 { margin: 0; font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+
+.ficha__disponibles { margin: 0; color: var(--claro, #e0e0e0); }
+.ficha__disponibles strong { color: var(--blanco, #fff); font-size: 1.1rem; }
+
+.ficha__seccion {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: var(--carbon, #121212);
+  border: 1px solid var(--borde, #242424);
+  border-radius: 16px;
+}
+.ficha__seccion h3 {
+  margin: 0;
+  color: var(--gris, #757575);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ficha__seccion p { margin: 0; }
+.ficha__seccion a { color: var(--blanco, #fff); }
+.ficha__nota { color: var(--gris, #757575); font-size: 0.85rem; }
+
+.ficha__boton {
+  justify-self: start;
+  padding: 8px 18px;
+  background: var(--blanco, #fff);
+  color: var(--negro, #000) !important;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.ficha__boton:hover { opacity: 0.85; }
+
+/* Horarios y precios: concepto a la izquierda, valor a la derecha */
+.ficha__filas { display: grid; margin: 0; }
+.ficha__filas > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--borde, #242424);
+}
+.ficha__filas > div:last-child { border-bottom: 0; }
+.ficha__filas dt { color: var(--claro, #e0e0e0); }
+.ficha__filas dd { margin: 0; font-weight: 600; text-align: right; }
+
+.ficha__reglas { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--claro, #e0e0e0); }
+
+.ficha__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ficha__tags li {
+  padding: 3px 12px;
+  border: 1px solid var(--borde-fuerte, #333);
+  border-radius: 999px;
+  color: var(--claro, #e0e0e0);
+  font-size: 0.8rem;
+}
+
+.ficha :where(button, a):focus-visible { outline: 2px solid var(--blanco, #fff); outline-offset: 2px; }
