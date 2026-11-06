@@ -5,6 +5,7 @@ import {
   collection, query, where, getDocs, doc, updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config.js";
+
 import {
   FaParking, FaCalendarAlt, FaClock, FaHourglassHalf, FaCar,
   FaCheckCircle, FaTimesCircle, FaSpinner, FaTrash,
