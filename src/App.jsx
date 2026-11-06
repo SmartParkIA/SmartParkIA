@@ -1,13 +1,14 @@
 import { Suspense, lazy } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Login from './components/login.jsx'
+import Login from './components/Login.jsx'
 
-const ReservarEspacio = lazy(() => import('./components/ReservarEspacio.jsx'))
-const Registro        = lazy(() => import('./components/Registro.jsx'))
+const Reservas            = lazy(() => import('./components/Reservas.jsx'))
+const Registro            = lazy(() => import('./components/Registro.jsx'))
+const Perfil              = lazy(() => import('./components/Perfil.jsx'))
+const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'))
 
-// Descomenta cuando crees esos archivos:
- const Perfil              = lazy(() => import('./components/Perfil.jsx'))
- const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'))
+// Descomenta cuando conviertas el mapa:
+// const Mapa = lazy(() => import('./components/Mapa.jsx'))
 
 function App() {
   return (
@@ -20,14 +21,15 @@ function App() {
         }
       >
         <Routes>
-          <Route path="/"         element={<Login />} />
-          <Route path="/login"    element={<Login />} />
-          <Route path="/registro" element={<Registro />} />
-          <Route path="/reservar" element={<ReservarEspacio />} />
+          <Route path="/"                     element={<Login />} />
+          <Route path="/login"                element={<Login />} />
+          <Route path="/registro"             element={<Registro />} />
+          <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
 
-          {/* Descomenta cuando existan: */}
-          {<Route path="/perfil"              element={<Perfil />} /> }
-          { <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} /> }
+          <Route path="/perfil"               element={<Perfil />} />
+          <Route path="/reservar"             element={<Reservas />} />
+
+          {/* <Route path="/mapa" element={<Mapa />} /> */}
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
