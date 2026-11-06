@@ -193,7 +193,7 @@ export default function Finanzas() {
       </div>
 
       <div style={chartCardStyle}>
-        <h3 style={chartTitleStyle}><FaChartArea color="#10b981" /> Ganancias del Mes Actual</h3>
+        <h3 style={chartTitleStyle}><FaChartArea color="#10b981" /> Ganancias del Mes Actual.</h3>
         <div style={{ width: "100%", height: 300 }}>
           <ResponsiveContainer>
             <AreaChart data={datosGraficaMes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
