@@ -1,7 +1,8 @@
 /* src/styles/registro.css */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 /* =========================================
-   1. VARIABLES GLOBALES
+   1. VARIABLES Y RESET BÁSICO
    ========================================= */
 :root {
     --bg-deep: #03060d;
@@ -15,32 +16,33 @@
     --neon-glow: rgba(0, 242, 254, 0.35);
 }
 
-html {
-    color-scheme: dark;
+* {
+    box-sizing: border-box;
 }
 
 /* =========================================
-   2. CONTENEDOR PRINCIPAL (CENTRADO)
+   2. FONDOS ANIMADOS (LOGIN Y REGISTRO)
    ========================================= */
-.login-page {
+.login-page,
+.reg-page {
     display: flex;
     justify-content: center;
     align-items: center;
-    
     width: 100%;
     min-height: 100vh;
-    padding: 40px 20px; /* Respiro arriba y abajo */
-    
+    padding: 40px 20px;
     background-color: var(--bg-deep);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Outfit', "Segoe UI", system-ui, sans-serif;
     color: var(--text-primary);
     position: relative;
-    overflow: hidden; /* Evita que las luces del fondo generen scroll */
+    overflow: hidden;
 }
 
-/* LUCES FLUIDAS EN EL FONDO */
+/* Luces flotantes en el fondo */
 .login-page::before,
-.login-page::after {
+.login-page::after,
+.reg-page::before,
+.reg-page::after {
     content: '';
     position: absolute;
     border-radius: 50%;
@@ -50,7 +52,8 @@ html {
     z-index: 0;
 }
 
-.login-page::before {
+.login-page::before,
+.reg-page::before {
     width: 380px;
     height: 380px;
     background: radial-gradient(circle, var(--neon-cyan) 0%, rgba(0, 242, 254, 0) 70%);
@@ -59,7 +62,8 @@ html {
     animation: floatCyan 10s ease-in-out infinite alternate;
 }
 
-.login-page::after {
+.login-page::after,
+.reg-page::after {
     width: 420px;
     height: 420px;
     background: radial-gradient(circle, var(--neon-blue) 0%, rgba(0, 114, 255, 0) 70%);
@@ -81,9 +85,10 @@ html {
 }
 
 /* =========================================
-   3. TARJETA GLASSMORPHISM
+   3. TARJETAS GLASSMORPHISM
    ========================================= */
-.card {
+.card,
+.reg-card {
     position: relative;
     z-index: 1;
     background: var(--card-surface);
@@ -95,17 +100,24 @@ html {
     border: 1px solid var(--border-line);
     
     width: 100%;
-    max-width: 420px; /* Ligeramente más ancha para que quepan los apellidos */
-    margin: auto; /* ESTO ES CLAVE: Centra la tarjeta y permite scroll si es alta */
-    
-    box-sizing: border-box;
+    max-width: 420px; /* Ligeramente más ancha para el registro */
+    margin: auto;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.card:hover {
+.card:hover,
+.reg-card:hover {
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(0, 242, 254, 0.5);
 }
 
+.reg-card.is-success {
+    animation: pop 0.5s ease;
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* =========================================
+   4. TÍTULOS Y TEXTOS
+   ========================================= */
 h2 {
     text-align: center;
     color: #ffffff;
@@ -121,8 +133,15 @@ h2 {
     filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.4));
 }
 
+.subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: -10px 0 20px;
+}
+
 /* =========================================
-   4. FORMULARIO E INPUTS
+   5. FORMULARIOS E INPUTS
    ========================================= */
 label {
     display: block;
@@ -147,6 +166,7 @@ input {
     font-weight: 500;
     letter-spacing: 0.3px;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Outfit', sans-serif;
 }
 
 input::placeholder {
@@ -166,17 +186,17 @@ input:focus {
     transform: translateY(-1px);
 }
 
-/* Contenedor para Apellidos (Paterno y Materno) */
-.name-row {
+/* Filas para Apellidos */
+.row {
     display: flex;
     gap: 15px;
 }
-.name-row > div {
+.col {
     flex: 1;
 }
 
 /* =========================================
-   5. CONTRASEÑA Y EL OJO
+   6. CONTRASEÑA Y OJO
    ========================================= */
 .password-container {
     position: relative;
@@ -206,10 +226,31 @@ input:focus {
     background: rgba(0, 242, 254, 0.1);
 }
 
+/* Barra de fuerza de contraseña */
+.strength {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    font-size: 12px;
+}
+.strength .bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.strength .fill {
+    height: 100%;
+    transition: width 0.4s ease, background 0.4s ease;
+}
+
 /* =========================================
-   6. BOTÓN PRINCIPAL
+   7. BOTONES
    ========================================= */
-button[type="submit"] {
+button[type="submit"],
+.submit-btn {
     position: relative;
     width: 100%;
     background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan));
@@ -226,9 +267,15 @@ button[type="submit"] {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 4px 20px rgba(0, 242, 254, 0.3);
     overflow: hidden;
+    font-family: 'Outfit', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
 }
 
-button[type="submit"]::before {
+button[type="submit"]::before,
+.submit-btn::before {
     content: '';
     position: absolute;
     top: 0;
@@ -239,22 +286,26 @@ button[type="submit"]::before {
     transition: left 0.5s ease;
 }
 
-button[type="submit"]:hover::before {
+button[type="submit"]:hover::before,
+.submit-btn:hover::before {
     left: 100%;
 }
 
-button[type="submit"]:hover {
+button[type="submit"]:hover,
+.submit-btn:hover {
     transform: translateY(-2px) scale(1.01);
     box-shadow: 0 8px 25px rgba(0, 242, 254, 0.6);
     filter: brightness(1.1);
 }
 
-button[type="submit"]:active {
+button[type="submit"]:active,
+.submit-btn:active {
     transform: translateY(0) scale(0.99);
     box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
 }
 
-button[type="submit"]:disabled {
+button[type="submit"]:disabled,
+.submit-btn:disabled {
     opacity: 0.7;
     cursor: not-allowed;
     transform: none;
@@ -262,13 +313,38 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================
-   7. MENSAJES Y ENLACES
+   8. MENSAJES Y ENLACES
    ========================================= */
-#mensaje {
+#mensaje,
+.msg {
     margin-top: 18px;
     text-align: center;
     font-weight: 600;
     font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.msg.info { color: var(--neon-cyan); }
+.msg.ok { color: #10b981; }
+.msg.error { color: #ef4444; animation: shake 0.4s ease; }
+
+.success-box {
+    text-align: center;
+    padding: 20px 0;
+    color: var(--text-primary);
+}
+.success-box h3 {
+    color: #10b981;
+    margin: 16px 0 8px;
+    font-size: 22px;
+}
+.success-box .redirect {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 16px;
 }
 
 .link {
@@ -291,15 +367,49 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================
-   8. RESPONSIVE
+   9. ANIMACIONES EXTRA
+   ========================================= */
+@keyframes pop {
+    0%   { transform: scale(0); }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-6px); }
+    75%      { transform: translateX(6px); }
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(15, 23, 42, 0.3);
+    border-top-color: #0f172a;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.pop { animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* =========================================
+   10. RESPONSIVE
    ========================================= */
 @media (max-width: 480px) {
-    .card {
+    .card,
+    .reg-card {
         padding: 30px 20px;
         border-radius: 20px;
-        max-width: 100%;
+        max-width: 95%;
     }
     h2 {
         font-size: 22px;
+    }
+    .row {
+        flex-direction: column;
+        gap: 0;
     }
 }

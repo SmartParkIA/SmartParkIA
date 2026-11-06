@@ -1,9 +1,14 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signOut
+} from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { useState } from "react";
+import { FaEnvelope, FaEye, FaEyeSlash } from "react-icons/fa";
+import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+import "../styles/registro.css";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -12,6 +17,10 @@ export default function Login() {
   const [mensaje, setMensaje] = useState("");
   const [mensajeColor, setMensajeColor] = useState("#94a3b8");
   const [loading, setLoading] = useState(false);
+  
+  // Estados para manejar el reenvío de correo
+  const [showResend, setShowResend] = useState(false);
+  const [unverifiedUser, setUnverifiedUser] = useState(null);
 
   const navigate = useNavigate();
 
@@ -20,30 +29,48 @@ export default function Login() {
     setMensaje("Iniciando sesión...");
     setMensajeColor("#00f2fe");
     setLoading(true);
+    setShowResend(false); // Ocultar botón al intentar de nuevo
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-      // Verificar que el documento exista
-      const docRef = doc(db, "users", userCredential.user.uid);
+      // 1. VERIFICAR SI EL CORREO ESTÁ AUTENTICADO
+      if (!user.emailVerified) {
+        setUnverifiedUser(user); // Guardamos el usuario para el reenvío
+        setMensaje("No autenticado: Debes verificar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada o spam.");
+        setMensajeColor("#ef4444"); // Rojo
+        setShowResend(true); // Mostramos el botón de reenviar
+        setLoading(false);
+        
+        // Cerramos la sesión de Firebase para que no pueda entrar a rutas protegidas
+        await signOut(auth); 
+        return; // Detenemos el código aquí (NO redirige al perfil)
+      }
+
+      // 2. SI ESTÁ VERIFICADO, VERIFICAMOS FIRESTORE Y REDIRIGIMOS
+      const docRef = doc(db, "users", user.uid);
       await getDoc(docRef);
 
       setMensaje("¡Bienvenido! Redirigiendo...");
-      setMensajeColor("#10b981");
+      setMensajeColor("#10b981"); // Verde
 
       setTimeout(() => navigate("/perfil"), 800);
+      
     } catch (error) {
       console.error("Error de login:", error);
 
       let msg = "Error: " + error.message;
       switch (error.code) {
         case "auth/invalid-email":
-          msg = "Correo inválido.";
+          msg = "El formato del correo es inválido.";
           break;
-        case "auth/invalid-credential":
-        case "auth/wrong-password":
         case "auth/user-not-found":
-          msg = "Correo o contraseña incorrectos.";
+          msg = "Este correo no está registrado. Por favor, regístrate.";
+          break;
+        case "auth/wrong-password":
+        case "auth/invalid-credential":
+          msg = "Contraseña incorrecta. Intenta de nuevo.";
           break;
         case "auth/too-many-requests":
           msg = "Demasiados intentos. Intenta más tarde.";
@@ -52,6 +79,21 @@ export default function Login() {
       setMensaje(msg);
       setMensajeColor("#ef4444");
       setLoading(false);
+    }
+  };
+
+  // Función para reenviar el correo de verificación
+  const handleResendEmail = async () => {
+    if (!unverifiedUser) return;
+    try {
+      await sendEmailVerification(unverifiedUser);
+      setMensaje("¡Correo de verificación reenviado! Revisa tu bandeja de entrada.");
+      setMensajeColor("#10b981");
+      setShowResend(false);
+    } catch (error) {
+      console.error("Error al reenviar:", error);
+      setMensaje("Error al reenviar el correo. Intenta más tarde.");
+      setMensajeColor("#ef4444");
     }
   };
 
@@ -94,14 +136,41 @@ export default function Login() {
           </div>
 
           <button type="submit" disabled={loading}>
-            {loading ? "Iniciando..." : "Iniciar Sesión"}
+            {loading ? <span className="spinner"></span> : "Iniciar Sesión"}
           </button>
         </form>
 
+        {/* Mensajes de estado o error */}
         {mensaje && (
           <p id="mensaje" style={{ color: mensajeColor }}>
             {mensaje}
           </p>
+        )}
+
+        {/* BOTÓN PARA REENVIAR EL CORREO (Solo aparece si no está verificado) */}
+        {showResend && (
+          <button 
+            onClick={handleResendEmail} 
+            style={{
+              width: '100%', 
+              marginTop: '10px', 
+              padding: '10px', 
+              background: 'transparent', 
+              border: '1px solid #00f2fe', 
+              color: '#00f2fe', 
+              borderRadius: '8px', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              fontWeight: '600',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <FaEnvelope /> Reenviar correo de verificación
+          </button>
         )}
 
         <div className="link">
@@ -109,108 +178,9 @@ export default function Login() {
         </div>
 
         <div className="link">
-         ¿No tienes cuenta? <Link to="/registro">Regístrate aquí</Link>
+          ¿No tienes cuenta? <Link to="/registro">Regístrate aquí</Link>
         </div>
       </div>
-       
-
-      {/* Estilos embebidos para mantener "un solo archivo" */}
-      <style>{`
-        .login-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-          font-family: 'Segoe UI', system-ui, sans-serif;
-          padding: 20px;
-          box-sizing: border-box;
-        }
-        .login-page .card {
-          background: #1e293b;
-          padding: 40px;
-          border-radius: 16px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-          width: 100%;
-          max-width: 400px;
-          border: 1px solid rgba(0, 242, 254, 0.15);
-        }
-        .login-page .card h2 {
-          text-align: center;
-          color: #00f2fe;
-          margin: 0 0 24px;
-          font-size: 28px;
-          letter-spacing: 0.5px;
-        }
-        .login-page .card label {
-          display: block;
-          color: #94a3b8;
-          font-size: 14px;
-          margin: 16px 0 8px;
-        }
-        .login-page .card input {
-          width: 100%;
-          padding: 12px 14px;
-          background: #0f172a;
-          border: 1px solid #334155;
-          border-radius: 8px;
-          color: #e2e8f0;
-          font-size: 14px;
-          box-sizing: border-box;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-        .login-page .card input:focus { border-color: #00f2fe; }
-        .login-page .password-container { position: relative; }
-        .login-page .password-container input { padding-right: 45px; }
-        .login-page .toggle-password {
-          position: absolute;
-          right: 8px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          padding: 6px;
-        }
-        .login-page .card form > button[type="submit"] {
-          width: 100%;
-          padding: 12px;
-          margin-top: 24px;
-          background: linear-gradient(135deg, #00f2fe, #4facfe);
-          color: #0f172a;
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: opacity 0.2s;
-        }
-        .login-page .card form > button[type="submit"]:hover { opacity: 0.9; }
-        .login-page .card form > button[type="submit"]:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .login-page #mensaje {
-          text-align: center;
-          margin-top: 16px;
-          font-size: 14px;
-          min-height: 20px;
-        }
-        .login-page .link {
-          text-align: center;
-          margin-top: 16px;
-          color: #94a3b8;
-          font-size: 14px;
-        }
-        .login-page .link a {
-          color: #00f2fe;
-          text-decoration: none;
-        }
-        .login-page .link a:hover { text-decoration: underline; }
-      `}</style>
     </div>
   );
 }
