@@ -1,202 +1,193 @@
 # SmartPark IA
- 
+
 ## Descripción
 
 Se desarrolla aplicación multiplataforma para los servicios privados de acceso publico. Se requiere el control de la gestión inteligente de estacionamientos, con detección de espacios ocupados o disponibles en tiempo real y seguimiento de reservas.
- 
+
 ## Objetivo
 
-Desarrollar una aplicacion multiplataforma de gestion de estacionamientos, los servicios privados de acceso publico, en un periodo de cuatro meses utilizando scrum y las etiquetas html, css, js, mysql.
- 
-## Equipo de desarrollo
-
-• SM: Barrera Gonzales Angelica Yolotzin
-
-• Barrera Perez Marco Antonio
+Desarrollar una aplicacion multiplataforma de gestion de estacionamientos, los servicios privados de acceso publico, en un periodo de cuatro meses utilizando scrum y las tecnologías web modernas.
 
 ## Equipo de desarrollo
 
-• Melgar Angeles Gabriela Sarahi
+- SM: Barrera Gonzales Angelica Yolotzin
+- Barrera Perez Marco Antonio
+- Hernandez Ruiz Luis Enrique
+- Cuin Arvizu Victor Rey
+- Melgar Angeles Gabriela Sarahi
+- Mercado Mendez Estefani
+- Juan Jonathan Solano Miranda
 
-• Mercado Mendez Estefani
-
-• Juan Jonathan Solano Miranda
- 
 ## Funcionalidades
 
 Control de usuarios
 
-• [ ] Registro, inicio de sesion y recuperacion de contrasena
+- [ ] Registro de usuario
+- [ ] Inicio y cierre de sesión
+- [ ] Recuperar contraseña
+- [ ] Perfil y vehículo
+- [ ] Control de usuarios (administrador)
 
-• [ ] Perfil y vehiculos
-
-• [ ] Roles (Usuario / Administrador)
-
-• [ ] Bloqueo y administracion de cuentas
- 
 Consulta de estacionamientos
 
-• [ ] Lista y mapa, detalle y disponibilidad
+- [ ] Ver estacionamientos
+- [ ] Información detallada
+- [ ] Consultar y comparar disponibilidad
+- [ ] Mapa de espacios
 
-• [ ] Comparacion entre estacionamientos
-
-• [ ] Mapa de espacios con estado
- 
 IoT en tiempo real
 
-• [ ] Deteccion de ocupado/libre con sensores
+- [ ] Detección de ocupación y liberación
+- [ ] Disponibilidad en tiempo real
+- [ ] Monitoreo de dispositivos IoT
 
-• [ ] Publicacion MQTT por HiveMQ
-
-• [ ] Actualizacion inmediata y monitoreo de dispositivos
- 
 Reservaciones
 
-• [ ] Reservar, consultar, cancelar y ver historial
+- [ ] Reservar espacio
+- [ ] Ver reserva
+- [ ] Cancelar reserva
+- [ ] Historial de reservaciones
 
-• [ ] Control de estados de la reserva
- 
 Acceso con QR
 
-• [ ] Generacion de QR por reserva
+- [ ] Generar código QR de acceso
+- [ ] Escanear y validar QR
+- [ ] Apertura de barrera con servomotor
+- [ ] Bitacora de accesos
 
-• [ ] Escaneo y validacion en el backend
-
-• [ ] Apertura de barrera con servomotor
-
-• [ ] Bitacora de entradas y salidas
- 
 Smartwatch y notificaciones
 
-• [ ] Vinculacion del reloj
+- [ ] Vincular smartwatch
+- [ ] Notificaciones de reserva
+- [ ] Notificaciones de acceso y tiempo
+- [ ] Preferencias de notificaciones
 
-• [ ] Notificaciones de reservas, acceso, tiempo restante y alertas
-
-• [ ] Preferencias de notificacion
- 
 Inteligencia artificial
 
-• [ ] Tiempo estimado de liberación
+- [ ] Tiempo estimado de liberación
+- [ ] Predicción de ocupación
+- [ ] Análisis de demanda
+- [ ] Informes inteligentes
 
-• [ ] Predicción de ocupación
-
-• [ ] Análisis de demanda e informes automáticos
- 
 Administración
 
-• [ ] Alta, edición y desactivación de estacionamientos
+- [ ] Registrar estacionamiento
+- [ ] Modificar estacionamiento
+- [ ] Desactivar estacionamiento
+- [ ] Configurar espacios
 
-• [ ] Configuración de espacios y dispositivos
- 
 Reportes
 
-• [ ] Ocupación diaria, semanal y mensual
+- [ ] Reporte de ocupación y reservaciones
+- [ ] Historial de ocupación
+- [ ] Estadísticas con gráficas
 
-• [ ] Reservaciones, historial y estadísticas con graficas
-
-• [ ] Exportación
- 
 Multiplataforma
 
-• [ ] Misma cuenta y funciones en Android, smartwatch y web
- 
+- [ ] Uso multiplataforma
+
 ## Actores
 
 | Actor | Tipo |
-
 | --- | --- |
-
 | Usuario | Principal |
-
 | Administrador | Principal |
-
 | Sistema IoT | Secundario (dispositivo) |
-
 | Smartwatch | Secundario (dispositivo) |
-
 | Modulo de IA | Secundario (sistema) |
-
 | Servicios externos | Secundario (sistema) |
- 
+
 ## Tecnologias utilizadas
 
-• HTML
+- HTML
+- CSS
+- JS
+- React
+- Node.js + Express
+- Firebase (Auth & Firestore)
+- HiveMQ (MQTT)
+- Firebase Cloud Messaging (FCM)
+- Python
 
-• CSS
+## Pila tecnológica
 
-• JS
+| Capa | Tecnología | Uso |
+|---|---|---|
+| Frontend | React (con Vite) | Aplicación multiplataforma para usuario y administrador |
+| Wearable | Wear OS (Android Studio) | App del smartwatch con notificaciones |
+| Base de datos y Auth | Firebase (Firestore + Auth) | Almacenamiento NoSQL en tiempo real, gestión de usuarios, perfiles y roles |
+| Backend y API | Node.js + Express | Servidor central para validación de QR, lógica de negocio y Firebase Admin SDK |
+| Mensajería IoT | HiveMQ (MQTT) | Comunicación ligera para la transmisión del estado de sensores (ocupado/libre) |
+| Hardware | ESP32, sensores de ocupación, escáner QR, servomotor | Detección física de espacios y apertura de barrera de acceso |
+| Interfaz y Estilos | CSS Modules / Tailwind / react-icons | Diseño visual bajo paleta de negro, blanco y grises con iconos responsivos |
+| Gestión del proyecto | GitHub Projects, planning poker | Backlog, sprints, tamaños y estados |
 
-• React
-
-• MySQL
-
-• Node.js + Express
-
-• Firebase
-
-• HiveMQ (MQTT)
-
-• Firebase Cloud Messaging (FCM)
-
-• Python
- 
 ## Programa
 
 FECHA DE INICIO: 18 DE SEPTIEMBRE  
-
 FECHA DE FINALIZACION: 20 DE NOVIEMBRE  
- 
+
 ---
- 
-## Distribución de Sprints (2 semanas cada uno)
- 
-### Sprint 1 (Semana 1 - Semana 2)
 
-* **Objetivo:** Configuración inicial del proyecto, base de datos y módulo fundamental de usuarios y administración básica de estacionamientos.
+## División de Sprints (Estructura de Sprints Scrum - 2 semanas c/u)
 
-* **Tareas asignadas:**
+### **Sprint 1: Configuración Inicial, Usuarios y Alta de Estacionamientos** *(Semanas 1 y 2)*
 
-  * Control de usuarios (Registro, inicio de sesión, recuperación de contraseña, perfil, vehículos y roles).
+- **Objetivo del Sprint:** Establecer las bases tecnológicas del proyecto, la arquitectura multiplataforma inicial, el control de usuarios mediante Firebase Auth y Firestore, y la gestión administrativa básica.
 
-  * Administración (Alta, edición y desactivación de estacionamientos).
+- **Tareas / Funcionalidades asociadas:**
+  * Configuración del entorno base (HTML, CSS, JS, React, Node.js + Express, Firebase).
+  * Registro de usuario
+  * Inicio y cierre de sesión
+  * Recuperar contraseña
+  * Perfil y vehículo
+  * Registrar estacionamiento
 
-  * Estructura base multiplataforma (HTML, CSS, JS, React, Node.js + Express, MySQL y Firebase).
- 
-### Sprint 2 (Semana 3 - Semana 4)
+### **Sprint 2: Gestión de Espacios, Catálogos y Sistema de Reservas** *(Semanas 3 y 4)*
 
-* **Objetivo:** Implementación del sistema de consulta de estacionamientos, gestión de reservas y control de cuentas de usuario.
+- **Objetivo del Sprint:** Desarrollar la experiencia de búsqueda, consulta de estacionamientos y el flujo completo de reservaciones sincronizadas en tiempo real con Firestore.
 
-* **Tareas asignadas:**
+- **Tareas / Funcionalidades asociadas:**
+  * Control de usuarios (administrador)
+  * Ver estacionamientos
+  * Información detallada
+  * Consultar y comparar disponibilidad
+  * Mapa de espacios
+  * Reservar espacio
+  * Ver reserva
+  * Cancelar reserva
+  * Historial de reservaciones
 
-  * Control de usuarios (Bloqueo y administración de cuentas).
+### **Sprint 3: Integración IoT, Accesos Automatizados y Hardware** *(Semanas 5 y 6)*
 
-  * Consulta de estacionamientos (Lista, mapa, detalle, disponibilidad y comparación entre estacionamientos).
+- **Objetivo del Sprint:** Implementar la conectividad en tiempo real con sensores físicos vía MQTT (HiveMQ) y automatizar el acceso vehicular seguro por medio de códigos QR.
 
-  * Reservaciones (Reservar, consultar, cancelar, ver historial y control de estados).
- 
-### Sprint 3 (Semana 5 - Semana 6)
+- **Tareas / Funcionalidades asociadas:**
+  * Detección de ocupación y liberación 
+  * Disponibilidad en tiempo real
+  * Monitoreo de dispositivos IoT
+  * Generar código QR de acceso
+  * Escanear y validar QR
+  * Apertura de barrera con servomotor
+  * Bitácora de accesos
+  * Modificar estacionamiento
+  * Desactivar estacionamiento
+  * Configurar espacios
 
-* **Objetivo:** Integración de hardware IoT en tiempo real, control de accesos mediante códigos QR y configuración de espacios físicos.
+### **Sprint 4: Inteligencia Artificial, Notificaciones, Reportes y Cierre Multiplataforma** *(Semanas 7 y 8)*
 
-* **Tareas asignadas:**
+- **Objetivo del Sprint:** Integrar los modelos predictivos de IA (Python), la sincronización con smartwatch, el sistema de notificaciones push (FCM), la reportería avanzada y la validación multiplataforma final.
 
-  * IoT en tiempo real (Detección de ocupado/libre con sensores, publicación MQTT por HiveMQ, actualización inmediata y monitoreo).
-
-  * Acceso con QR (Generación de QR por reserva, escaneo y validación en el backend, apertura de barrera con servomotor y bitácora).
-
-  * Administración (Configuración de espacios y dispositivos).
- 
-### Sprint 4 (Semana 7 - Semana 8)
-
-* **Objetivo:** Integración de inteligencia artificial, notificaciones móviles/smartwatch, generación de reportes y validación multiplataforma final.
-
-* **Tareas asignadas:**
-
-  * Smartwatch y notificaciones (Vinculación del reloj, notificaciones push mediante FCM, alertas y preferencias).
-
-  * Inteligencia artificial (Tiempo estimado de liberación, predicción de ocupación, análisis de demanda e informes automáticos con Python).
-
-  * Reportes (Ocupación diaria/semanal/mensual, historial, estadísticas con gráficas y exportación).
-
-  * Multiplataforma (Validación de misma cuenta y funciones en Android, smartwatch y web).
- 
+- **Tareas / Funcionalidades asociadas:**
+  * Vincular smartwatch
+  * Notificaciones de reserva
+  * Notificaciones de acceso y tiempo
+  * Preferencias de notificaciones
+  * Tiempo estimado de liberación
+  * Predicción de ocupación
+  * Análisis de demanda
+  * Informes inteligentes
+  * Reporte de ocupación y reservaciones
+  * Historial de ocupación
+  * Estadísticas con gráficas
+  * Uso multiplataforma
