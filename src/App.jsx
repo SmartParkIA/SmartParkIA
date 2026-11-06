@@ -1,8 +1,8 @@
 import { Suspense, lazy } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './components/Login.jsx'
+import AsistenteVirtual from './components/AsistenteVirtual.jsx'   // ⬅️ import directo, sin lazy
 
-const AsistenteVirtual            = lazy(() => import('./components/AsistenteVirtual.jsx'))
 const Reservas            = lazy(() => import('./components/Reservas.jsx'))
 const Registro            = lazy(() => import('./components/Registro.jsx'))
 const Perfil              = lazy(() => import('./components/Perfil.jsx'))
@@ -35,13 +35,16 @@ function App() {
           <Route path="/VerReserva"             element={<VerReserva />} />
           <Route path="/historial"            element={<Historial />} />
           <Route path="/estacionamientos"     element={<Estacionamientos />} />
- <Route path="/AsistenteVirtual"     element={<AsistenteVirtual />} />
-          {/* Mapa: OJO con el :id — es obligatorio */}
+
+          {/* Mapa con :id */}
           <Route path="/mapa-estacionamiento/:id" element={<MapaEstacionamiento />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+
+      {/* ⬇️⬇️ El asistente va AQUÍ, FUERA de Routes pero DENTRO de HashRouter */}
+      <AsistenteVirtual />
     </HashRouter>
   )
 }
