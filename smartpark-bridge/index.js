@@ -14,7 +14,8 @@ const db = getFirestore();
 
 // 3. Conexión al broker MQTT de HiveMQ
 const mqttBroker = "mqtt://broker.hivemq.com:1883";
-const topic = "smartpark/cajones/cajon_1/estado";
+// MODIFICACIÓN: Usamos el comodín '+' para escuchar cajon_1, cajon_2 y cajon_3
+const topic = "smartpark/cajones/+/estado";
 
 console.log("Conectando al broker MQTT de HiveMQ...");
 const client = mqtt.connect(mqttBroker);
