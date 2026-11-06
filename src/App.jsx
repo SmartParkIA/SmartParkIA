@@ -1,33 +1,39 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
-import VerEstacionamientos from './components/VerEstacionamientos.jsx'
+import { Suspense, lazy } from 'react'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import Login from './components/login.jsx'
 
-// Se carga solo al entrar a #/reservar (así sus estilos globales no afectan a la otra pantalla).
 const ReservarEspacio = lazy(() => import('./components/ReservarEspacio.jsx'))
+const Registro        = lazy(() => import('./components/Registro.jsx'))
 
-const rutaActual = () => window.location.hash.replace(/^#/, '') || '/'
+// Descomenta cuando crees esos archivos:
+ const Perfil              = lazy(() => import('./components/Perfil.jsx'))
+ const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'))
 
-/**
- * Dos pantallas sin instalar nada extra:
- *   http://localhost:5173/            → ver estacionamientos
- *   http://localhost:5173/#/reservar  → reservar espacio
- */
 function App() {
-  const [ruta, setRuta] = useState(rutaActual)
+  return (
+    <HashRouter>
+      <Suspense
+        fallback={
+          <div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>
+            Cargando...
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/"         element={<Login />} />
+          <Route path="/login"    element={<Login />} />
+          <Route path="/registro" element={<Registro />} />
+          <Route path="/reservar" element={<ReservarEspacio />} />
 
-  useEffect(() => {
-    const alCambiar = () => setRuta(rutaActual())
-    window.addEventListener('hashchange', alCambiar)
-    return () => window.removeEventListener('hashchange', alCambiar)
-  }, [])
+          {/* Descomenta cuando existan: */}
+          {<Route path="/perfil"              element={<Perfil />} /> }
+          { <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} /> }
 
-  if (ruta.startsWith('/reservar')) {
-    return (
-      <Suspense fallback={null}>
-        <ReservarEspacio />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Suspense>
-    )
-  }
-  return <VerEstacionamientos />
+    </HashRouter>
+  )
 }
 
 export default App
