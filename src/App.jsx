@@ -7,9 +7,9 @@ const Registro            = lazy(() => import('./components/Registro.jsx'))
 const Perfil              = lazy(() => import('./components/Perfil.jsx'))
 const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'))
 const VerReserva          = lazy(() => import('./components/VerReserva.jsx'))
- const Historial          = lazy(() => import('./components/Historial.jsx'))
-// Descomenta cuando conviertas el mapa:
-// const Mapa = lazy(() => import('./components/Mapa.jsx'))
+const Historial           = lazy(() => import('./components/Historial.jsx'))
+const Estacionamientos    = lazy(() => import('./components/Estacionamientos.jsx'))
+const MapaEstacionamiento = lazy(() => import('./components/MapaEstacionamiento.jsx'))
 
 function App() {
   return (
@@ -22,15 +22,21 @@ function App() {
         }
       >
         <Routes>
+          {/* Auth */}
           <Route path="/"                     element={<Login />} />
           <Route path="/login"                element={<Login />} />
           <Route path="/registro"             element={<Registro />} />
           <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
- <Route path="/reservar"             element={<Reservas />} />
+
+          {/* App */}
           <Route path="/perfil"               element={<Perfil />} />
-          <Route path="/VerReserva"             element={<VerReserva />} />
- <Route path="/Historial"             element={<Historial />} />
-          {/* <Route path="/mapa" element={<Mapa />} /> */}
+          <Route path="/reservar"             element={<Reservas />} />
+          <Route path="/reservas"             element={<VerReserva />} />
+          <Route path="/historial"            element={<Historial />} />
+          <Route path="/estacionamientos"     element={<Estacionamientos />} />
+
+          {/* Mapa: OJO con el :id — es obligatorio */}
+          <Route path="/mapa-estacionamiento/:id" element={<MapaEstacionamiento />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

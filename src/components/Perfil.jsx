@@ -119,7 +119,7 @@ export default function Perfil() {
           <Link to="/perfil" className="active" onClick={() => setSidebarOpen(false)}>
             <FaUser /> Mi perfil
           </Link>
-          <Link to="/estacionamientos" onClick={() => setSidebarOpen(false)}>
+          <Link to="/Estacionamientos" onClick={() => setSidebarOpen(false)}>
             <FaParking /> Estacionamientos
           </Link>
              <Link to="/VerReserva" onClick={() => setSidebarOpen(false)}>

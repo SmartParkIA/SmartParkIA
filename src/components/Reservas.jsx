@@ -9,7 +9,7 @@ import {
   FaCar, FaParking, FaCalendarAlt, FaClock, FaHourglassHalf,
   FaCheckCircle, FaTimesCircle, FaSpinner, FaMapMarkedAlt,
   FaExclamationTriangle, FaLightbulb, FaArrowLeft, FaTrash,
-  FaInfoCircle, FaSave,
+  FaInfoCircle, FaSave, FaBuilding,
 } from "react-icons/fa";
 
 const MARCAS = ["Nissan", "Chevrolet", "Volkswagen", "Toyota", "Ford", "Honda", "Kia", "Mazda", "Hyundai", "SEAT"];
@@ -24,7 +24,7 @@ export default function ReservarEspacio() {
   const [activeReserva, setActiveReserva] = useState(null);
 
   const [form, setForm] = useState({
-    estacionamiento: "SmartPark Central - Zona A",
+    estacionamiento: "",
     espacio: "",
     fecha: "",
     horario: "",
@@ -43,10 +43,18 @@ export default function ReservarEspacio() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  // Lee el cajón si vienes del mapa: /#/reservar?cajon=Cajon A13
+  // 🔗 Lee cajón Y estacionamiento si vienes del mapa:
+  // /#/reservar?cajon=P1-05&estacionamiento=Coyoacan
   useEffect(() => {
     const cajon = searchParams.get("cajon");
-    if (cajon) setForm((f) => ({ ...f, espacio: cajon }));
+    const est = searchParams.get("estacionamiento");
+    if (cajon || est) {
+      setForm((f) => ({
+        ...f,
+        ...(cajon ? { espacio: cajon } : {}),
+        ...(est ? { estacionamiento: est } : {}),
+      }));
+    }
   }, [searchParams]);
 
   // Auth + carga de reserva activa
@@ -97,8 +105,12 @@ export default function ReservarEspacio() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!form.estacionamiento.trim()) {
+      showToast("Elige un estacionamiento en el mapa.", "error");
+      return;
+    }
     if (!form.espacio.trim()) {
-      showToast("Primero elige un cajón.", "error");
+      showToast("Primero elige un cajón en el mapa.", "error");
       return;
     }
     if (!form.fecha || !form.horario) {
@@ -156,7 +168,7 @@ export default function ReservarEspacio() {
       showToast("¡Reserva confirmada!", "success");
       await cargarReserva(user.uid);
       setForm({
-        estacionamiento: "SmartPark Central - Zona A",
+        estacionamiento: "",
         espacio: "",
         fecha: "",
         horario: "",
@@ -236,7 +248,7 @@ export default function ReservarEspacio() {
 
               <div className="info-grid-2">
                 <div className="info-item">
-                  <label><FaParking /> Estacionamiento</label>
+                  <label><FaBuilding /> Estacionamiento</label>
                   <p>{activeReserva.estacionamiento || "—"}</p>
                 </div>
 
@@ -292,7 +304,8 @@ export default function ReservarEspacio() {
               <div className="tips-box">
                 <h4><FaLightbulb /> Proceso de Reserva</h4>
                 <ul>
-                  <li>Al confirmar, el cajón quedará asignado exclusivamente a tu cuenta.</li>
+                  <li>Elige un estacionamiento y luego un cajón en el mapa.</li>
+                  <li>Al confirmar, el cajón quedará asignado a tu cuenta.</li>
                   <li>Tu lugar se mantendrá apartado hasta finalizar el horario.</li>
                   <li>Solo puedes tener una reserva activa a la vez.</li>
                 </ul>
@@ -306,10 +319,13 @@ export default function ReservarEspacio() {
 
               <form onSubmit={handleSubmit}>
                 <div className="field">
-                  <label htmlFor="estacionamiento">Estacionamiento / Zona</label>
+                  <label htmlFor="estacionamiento">
+                    <FaBuilding /> Estacionamiento / Zona
+                  </label>
                   <input
                     id="estacionamiento"
                     type="text"
+                    placeholder="Selecciona uno desde el mapa"
                     value={form.estacionamiento}
                     onChange={handleChange}
                     required
@@ -317,21 +333,25 @@ export default function ReservarEspacio() {
                 </div>
 
                 <div className="field">
-                  <label htmlFor="espacio">Cajón seleccionado</label>
+                  <label htmlFor="espacio">
+                    <FaParking /> Cajón seleccionado
+                  </label>
                   <div className="input-with-action">
                     <input
                       id="espacio"
                       type="text"
-                      placeholder="Ej. Cajon A13"
+                      placeholder="Ej. P1-05"
                       value={form.espacio}
                       onChange={handleChange}
                       required
                     />
-                    <Link to="/mapa?modo=reservar" className="btn-mapa">
-                      <FaMapMarkedAlt /> Mapa
+                    <Link to="/estacionamientos" className="btn-mapa">
+                      <FaMapMarkedAlt /> Elegir en mapa
                     </Link>
                   </div>
-                  <small className="hint">También puedes escribirlo o volver desde el mapa.</small>
+                  <small className="hint">
+                    Haz clic en "Elegir en mapa" para escoger la plaza y el cajón.
+                  </small>
                 </div>
 
                 <div className="row">
@@ -443,8 +463,9 @@ export default function ReservarEspacio() {
             <h3>¿Cancelar Reserva?</h3>
             <p>
               Estás a punto de liberar tu cajón{" "}
-              <strong>{activeReserva?.espacio}</strong>. Esta acción no se puede
-              deshacer y otra persona podría ocuparlo.
+              <strong>{activeReserva?.espacio}</strong> del{" "}
+              <strong>{activeReserva?.estacionamiento}</strong>. Esta acción no se
+              puede deshacer y otra persona podría ocuparlo.
             </p>
             <div className="modal-buttons">
               <button
@@ -694,7 +715,11 @@ export default function ReservarEspacio() {
           text-transform: uppercase;
           letter-spacing: .5px;
           font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
         }
+        .field label svg { color: #00f2fe; }
         .field input, .field select {
           width: 100%;
           padding: 12px 14px;
@@ -724,7 +749,7 @@ export default function ReservarEspacio() {
           display: flex;
           gap: 8px;
         }
-        .input-with-action input { flex: 1; }
+        .input-with-action input { flex: 1; min-width: 0; }
         .btn-mapa {
           display: inline-flex;
           align-items: center;
@@ -982,6 +1007,8 @@ export default function ReservarEspacio() {
           .info-grid-2 { grid-template-columns: 1fr; }
           .row { grid-template-columns: 1fr; }
           .res-header h2 { font-size: 22px; }
+          .input-with-action { flex-direction: column; }
+          .btn-mapa { justify-content: center; padding: 12px; }
         }
       `}</style>
     </div>
