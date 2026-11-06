@@ -2,17 +2,19 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  collection, query, where, getDocs, addDoc, doc, updateDoc,
+  collection, query, where, getDocs, addDoc
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config.js";
+import { getVehiculos } from "../services/userService";
 import {
-  FaCar, FaParking, FaCalendarAlt, FaClock, FaHourglassHalf,
+  FaCar, FaParking, FaCalendarAlt, FaClock, 
   FaCheckCircle, FaTimesCircle, FaSpinner, FaMapMarkedAlt,
-  FaExclamationTriangle, FaLightbulb, FaArrowLeft, FaTrash,
-  FaInfoCircle, FaSave, FaBuilding,
+  FaLightbulb, FaArrowLeft, FaInfoCircle, FaSave, FaBuilding, FaCamera,
+  FaMoneyBillWave // <-- Ícono para el dinero
 } from "react-icons/fa";
 
 const MARCAS = ["Nissan", "Chevrolet", "Volkswagen", "Toyota", "Ford", "Honda", "Kia", "Mazda", "Hyundai", "SEAT"];
+const PRECIO_HORA = 50; // <-- TARIFA POR HORA
 
 export default function ReservarEspacio() {
   const navigate = useNavigate();
@@ -21,7 +23,14 @@ export default function ReservarEspacio() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeReserva, setActiveReserva] = useState(null);
+  
+  const [reservasActivas, setReservasActivas] = useState([]);
+  const MAX_RESERVAS = 3; 
+
+  const [misVehiculos, setMisVehiculos] = useState([]);
+  const [modoVehiculo, setModoVehiculo] = useState('registrado');
+  const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState('');
+  const [imagenBase64, setImagenBase64] = useState("");
 
   const [form, setForm] = useState({
     estacionamiento: "",
@@ -34,17 +43,16 @@ export default function ReservarEspacio() {
     placa: "",
   });
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [cancelando, setCancelando] = useState(false);
   const [toast, setToast] = useState(null);
+
+  // CÁLCULO DEL COSTO TOTAL
+  const totalPagar = Number(form.duracion) * PRECIO_HORA;
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
   };
 
-  // 🔗 Lee cajón Y estacionamiento si vienes del mapa:
-  // /#/reservar?cajon=P1-05&estacionamiento=Coyoacan
   useEffect(() => {
     const cajon = searchParams.get("cajon");
     const est = searchParams.get("estacionamiento");
@@ -57,7 +65,6 @@ export default function ReservarEspacio() {
     }
   }, [searchParams]);
 
-  // Auth + carga de reserva activa
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -65,22 +72,30 @@ export default function ReservarEspacio() {
         return;
       }
       setUser(u);
-      await cargarReserva(u.uid);
+      await cargarReservas(u.uid);
+      
+      const vehiculosGuardados = await getVehiculos(u.uid);
+      setMisVehiculos(vehiculosGuardados);
+      if (vehiculosGuardados.length === 0) setModoVehiculo('manual');
+
       setLoading(false);
     });
     return () => unsub();
   }, [navigate]);
 
-  const cargarReserva = async (uid) => {
+  const cargarReservas = async (uid) => {
     try {
       const q = query(collection(db, "reservas"), where("uid", "==", uid));
       const snap = await getDocs(q);
-      let activa = null;
+      const activas = [];
+      
       snap.forEach((d) => {
         const data = { id: d.id, ...d.data() };
-        if ((data.estado || "").toLowerCase() === "activa") activa = data;
+        if ((data.estado || "").toLowerCase() === "activa") {
+          activas.push(data);
+        }
       });
-      setActiveReserva(activa);
+      setReservasActivas(activas);
     } catch (err) {
       console.error(err);
       showToast("Error al cargar reservas", "error");
@@ -96,6 +111,35 @@ export default function ReservarEspacio() {
     }
   };
 
+  const seleccionarVehiculo = (e) => {
+    const id = e.target.value;
+    setVehiculoSeleccionado(id);
+    if (id) {
+      const auto = misVehiculos.find(v => v.id === id);
+      if (auto) {
+        setForm(prev => ({ ...prev, marca: auto.marca, modelo: auto.modelo, placa: auto.placa }));
+        setImagenBase64(auto.imagen || "");
+      }
+    } else {
+      setForm(prev => ({ ...prev, marca: '', modelo: '', placa: '' }));
+      setImagenBase64("");
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) return showToast("La imagen es muy grande (máx. 500 KB)", "error");
+    const reader = new FileReader();
+    reader.onloadend = () => setImagenBase64(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const limpiarFormularioVehiculo = () => {
+    setForm(prev => ({ ...prev, marca: '', modelo: '', placa: '' }));
+    setImagenBase64("");
+  };
+
   const hoyLocal = () => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -105,34 +149,22 @@ export default function ReservarEspacio() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.estacionamiento.trim()) {
-      showToast("Elige un estacionamiento en el mapa.", "error");
-      return;
+    if (reservasActivas.length >= MAX_RESERVAS) {
+      return showToast(`Solo puedes tener hasta ${MAX_RESERVAS} reservas activas.`, "error");
     }
-    if (!form.espacio.trim()) {
-      showToast("Primero elige un cajón en el mapa.", "error");
-      return;
-    }
-    if (!form.fecha || !form.horario) {
-      showToast("Completa fecha y horario.", "error");
-      return;
-    }
+
+    if (!form.estacionamiento.trim()) return showToast("Elige un estacionamiento en el mapa.", "error");
+    if (!form.espacio.trim()) return showToast("Primero elige un cajón en el mapa.", "error");
+    if (!form.fecha || !form.horario) return showToast("Completa fecha y horario.", "error");
+    if (!form.marca || !form.modelo || !form.placa) return showToast("Completa los datos del vehículo.", "error");
 
     const inicio = new Date(`${form.fecha}T${form.horario}`);
     const fin = new Date(inicio.getTime() + Number(form.duracion) * 60 * 60 * 1000);
-    if (fin <= new Date()) {
-      showToast("El horario seleccionado ya pasó.", "error");
-      return;
-    }
+    if (fin <= new Date()) return showToast("El horario seleccionado ya pasó.", "error");
 
     setSaving(true);
     try {
-      // Verificar solapamiento en el mismo cajón y fecha
-      const q = query(
-        collection(db, "reservas"),
-        where("espacio", "==", form.espacio),
-        where("fecha", "==", form.fecha)
-      );
+      const q = query(collection(db, "reservas"), where("espacio", "==", form.espacio), where("fecha", "==", form.fecha));
       const snap = await getDocs(q);
 
       let choque = false;
@@ -151,6 +183,7 @@ export default function ReservarEspacio() {
         return;
       }
 
+      // GUARDAMOS EL COSTO EN FIRESTORE
       await addDoc(collection(db, "reservas"), {
         uid: user.uid,
         estacionamiento: form.estacionamiento,
@@ -158,25 +191,22 @@ export default function ReservarEspacio() {
         fecha: form.fecha,
         horario: form.horario,
         duracion: `${form.duracion} horas`,
+        costoTotal: totalPagar, // <-- Guardamos el total
         estado: "activa",
         marca: form.marca,
         modelo: form.modelo,
         placa: form.placa,
+        imagen: imagenBase64,
         fechaCreacion: new Date().toISOString(),
       });
 
       showToast("¡Reserva confirmada!", "success");
-      await cargarReserva(user.uid);
-      setForm({
-        estacionamiento: "",
-        espacio: "",
-        fecha: "",
-        horario: "",
-        duracion: 2,
-        marca: "",
-        modelo: "",
-        placa: "",
-      });
+      await cargarReservas(user.uid);
+      
+      setForm((f) => ({ ...f, espacio: "", horario: "", marca: "", modelo: "", placa: "" }));
+      setImagenBase64("");
+      setVehiculoSeleccionado("");
+      
     } catch (err) {
       console.error(err);
       showToast("Error al crear la reserva", "error");
@@ -185,23 +215,6 @@ export default function ReservarEspacio() {
     }
   };
 
-  const confirmarCancelacion = async () => {
-    if (!activeReserva) return;
-    setCancelando(true);
-    try {
-      await updateDoc(doc(db, "reservas", activeReserva.id), { estado: "cancelada" });
-      showToast("Reserva cancelada exitosamente.", "success");
-      setModalOpen(false);
-      setActiveReserva(null);
-    } catch (err) {
-      console.error(err);
-      showToast("No se pudo cancelar la reserva.", "error");
-    } finally {
-      setCancelando(false);
-    }
-  };
-
-  // ============ RENDER ============
   if (loading) {
     return (
       <div className="res-page center-state">
@@ -214,284 +227,150 @@ export default function ReservarEspacio() {
   return (
     <div className="res-page">
       <div className="container">
+        
         <header className="res-header">
-          <Link to="/perfil" className="back-link">
-            <FaArrowLeft /> Volver al perfil
-          </Link>
-          <h2>{activeReserva ? "Mi Reserva Activa" : "Nueva Reserva"}</h2>
+          <Link to="/perfil" className="back-link"><FaArrowLeft /> Volver al perfil</Link>
+          <h2>Nueva Reserva</h2>
         </header>
 
-        {activeReserva ? (
-          /* ============ VISTA: RESERVA ACTIVA ============ */
-          <div className="reserva-card">
-            <div className="reserva-visual">
-              <div className="parking-scene">
-                <div className="parking-spot"></div>
-                <div className="car">
-                  <div className="car-windshield"></div>
-                  <div className="car-headlights"></div>
-                  <div className="wheel wheel-tl"></div>
-                  <div className="wheel wheel-tr"></div>
-                  <div className="wheel wheel-bl"></div>
-                  <div className="wheel wheel-br"></div>
-                </div>
+        <div className="reserva-card">
+          
+          <div className="reserva-visual">
+            <div className="parking-scene">
+              <div className="parking-spot"></div>
+              <div className="car">
+                <div className="car-windshield"></div>
+                <div className="car-headlights"></div>
+                <div className="wheel wheel-tl"></div>
+                <div className="wheel wheel-tr"></div>
+                <div className="wheel wheel-bl"></div>
+                <div className="wheel wheel-br"></div>
               </div>
-              <p className="reserva-hint">
-                <FaCheckCircle color="#10b981" /> Tu lugar está asegurado.
-              </p>
             </div>
-
-            <div className="reserva-info">
-              <div className="badge-active">
-                <FaCheckCircle /> RESERVA ACTIVA
-              </div>
-
-              <div className="info-grid-2">
-                <div className="info-item">
-                  <label><FaBuilding /> Estacionamiento</label>
-                  <p>{activeReserva.estacionamiento || "—"}</p>
-                </div>
-
-                <div className="info-item highlight">
-                  <label><FaParking /> Cajón</label>
-                  <p className="big-value">{activeReserva.espacio || "—"}</p>
-                </div>
-
-                <div className="info-item">
-                  <label><FaCalendarAlt /> Fecha</label>
-                  <p>{activeReserva.fecha || "—"}</p>
-                </div>
-
-                <div className="info-item">
-                  <label><FaClock /> Horario</label>
-                  <p>{activeReserva.horario || "—"}</p>
-                </div>
-
-                <div className="info-item">
-                  <label><FaHourglassHalf /> Duración</label>
-                  <p>{activeReserva.duracion || "—"}</p>
-                </div>
-
-                {activeReserva.placa && (
-                  <div className="info-item">
-                    <label><FaCar /> Placa</label>
-                    <p>{activeReserva.placa}</p>
-                  </div>
-                )}
-              </div>
-
-              <button className="btn-cancel" onClick={() => setModalOpen(true)}>
-                <FaTrash /> Cancelar Reserva
-              </button>
+            <div className="tips-box">
+              <h4><FaLightbulb /> Proceso de Reserva</h4>
+              <ul>
+                <li>Elige un estacionamiento y luego un cajón en el mapa.</li>
+                <li>La tarifa es de <strong>${PRECIO_HORA} MXN por hora</strong>.</li>
+                <li>Puedes tener hasta {MAX_RESERVAS} reservas activas.</li>
+              </ul>
             </div>
           </div>
-        ) : (
-          /* ============ VISTA: NUEVA RESERVA ============ */
-          <div className="reserva-card">
-            <div className="reserva-visual">
-              <div className="parking-scene">
-                <div className="parking-spot"></div>
-                <div className="car">
-                  <div className="car-windshield"></div>
-                  <div className="car-headlights"></div>
-                  <div className="wheel wheel-tl"></div>
-                  <div className="wheel wheel-tr"></div>
-                  <div className="wheel wheel-bl"></div>
-                  <div className="wheel wheel-br"></div>
-                </div>
-              </div>
 
-              <div className="tips-box">
-                <h4><FaLightbulb /> Proceso de Reserva</h4>
-                <ul>
-                  <li>Elige un estacionamiento y luego un cajón en el mapa.</li>
-                  <li>Al confirmar, el cajón quedará asignado a tu cuenta.</li>
-                  <li>Tu lugar se mantendrá apartado hasta finalizar el horario.</li>
-                  <li>Solo puedes tener una reserva activa a la vez.</li>
-                </ul>
-              </div>
-            </div>
+          <div className="reserva-info">
+            <p className="intro">
+              <FaInfoCircle /> 
+              {reservasActivas.length >= MAX_RESERVAS 
+                ? "Has alcanzado el límite de reservas. Ve a 'Mis Reservas' para cancelar una." 
+                : "Completa los datos para asegurar tu lugar antes de llegar."}
+            </p>
 
-            <div className="reserva-info">
-              <p className="intro">
-                <FaInfoCircle /> Completa los datos para asegurar tu lugar antes de llegar.
-              </p>
-
-              <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}>
+              <fieldset disabled={reservasActivas.length >= MAX_RESERVAS} style={{ border: "none", padding: 0, margin: 0, opacity: reservasActivas.length >= MAX_RESERVAS ? 0.5 : 1 }}>
+                
                 <div className="field">
-                  <label htmlFor="estacionamiento">
-                    <FaBuilding /> Estacionamiento / Zona
-                  </label>
-                  <input
-                    id="estacionamiento"
-                    type="text"
-                    placeholder="Selecciona uno desde el mapa"
-                    value={form.estacionamiento}
-                    onChange={handleChange}
-                    required
-                  />
+                  <label htmlFor="estacionamiento"><FaBuilding /> Estacionamiento / Zona</label>
+                  <input id="estacionamiento" type="text" placeholder="Selecciona uno desde el mapa" value={form.estacionamiento} onChange={handleChange} required />
                 </div>
 
                 <div className="field">
-                  <label htmlFor="espacio">
-                    <FaParking /> Cajón seleccionado
-                  </label>
+                  <label htmlFor="espacio"><FaParking /> Cajón seleccionado</label>
                   <div className="input-with-action">
-                    <input
-                      id="espacio"
-                      type="text"
-                      placeholder="Ej. P1-05"
-                      value={form.espacio}
-                      onChange={handleChange}
-                      required
-                    />
-                    <Link to="/estacionamientos" className="btn-mapa">
-                      <FaMapMarkedAlt /> Elegir en mapa
-                    </Link>
+                    <input id="espacio" type="text" placeholder="Ej. P1-05" value={form.espacio} onChange={handleChange} required />
+                    <Link to="/estacionamientos" className="btn-mapa"><FaMapMarkedAlt /> Elegir en mapa</Link>
                   </div>
-                  <small className="hint">
-                    Haz clic en "Elegir en mapa" para escoger la plaza y el cajón.
-                  </small>
+                  <small className="hint">Haz clic en "Elegir en mapa" para escoger la plaza y el cajón.</small>
                 </div>
 
                 <div className="row">
                   <div className="field">
                     <label htmlFor="fecha">Fecha</label>
-                    <input
-                      id="fecha"
-                      type="date"
-                      value={form.fecha}
-                      onChange={handleChange}
-                      min={hoyLocal()}
-                      required
-                    />
+                    <input id="fecha" type="date" value={form.fecha} onChange={handleChange} min={hoyLocal()} required />
                   </div>
                   <div className="field">
                     <label htmlFor="horario">Hora de inicio</label>
-                    <input
-                      id="horario"
-                      type="time"
-                      value={form.horario}
-                      onChange={handleChange}
-                      required
-                    />
+                    <input id="horario" type="time" value={form.horario} onChange={handleChange} required />
                   </div>
                 </div>
 
                 <div className="field">
                   <label htmlFor="duracion">Duración (horas)</label>
-                  <input
-                    id="duracion"
-                    type="number"
-                    value={form.duracion}
-                    onChange={handleChange}
-                    min="1"
-                    max="12"
-                    required
-                  />
+                  <input id="duracion" type="number" value={form.duracion} onChange={handleChange} min="1" max="12" required />
                 </div>
 
-                <div className="section-title">
-                  <FaCar /> Datos del vehículo
-                </div>
-
-                <div className="row">
-                  <div className="field">
-                    <label htmlFor="marca">Marca</label>
-                    <input
-                      id="marca"
-                      type="text"
-                      list="listaMarcas"
-                      placeholder="Ej. Nissan"
-                      value={form.marca}
-                      onChange={handleChange}
-                      required
-                    />
-                    <datalist id="listaMarcas">
-                      {MARCAS.map((m) => <option key={m} value={m} />)}
-                    </datalist>
+                {/* RECUADRO DEL COSTO TOTAL */}
+                <div style={{ 
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  background: "rgba(0, 242, 254, 0.08)", padding: "15px", borderRadius: "10px",
+                  border: "1px dashed rgba(0, 242, 254, 0.4)", marginBottom: "15px"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#00f2fe" }}>
+                    <FaMoneyBillWave size={20} />
+                    <span style={{ fontSize: "14px", fontWeight: "600" }}>Costo Total a Pagar:</span>
                   </div>
-                  <div className="field">
-                    <label htmlFor="modelo">Modelo</label>
-                    <input
-                      id="modelo"
-                      type="text"
-                      placeholder="Ej. Versa 2022"
-                      value={form.modelo}
-                      onChange={handleChange}
-                      required
-                    />
+                  <span style={{ fontSize: "20px", fontWeight: "800", color: "#00f2fe" }}>
+                    ${totalPagar} MXN
+                  </span>
+                </div>
+
+                <div className="section-title"><FaCar /> Datos del vehículo</div>
+
+                <div style={{ display: "flex", background: "rgba(0, 0, 0, 0.3)", borderRadius: "8px", padding: "4px", marginBottom: "15px" }}>
+                  <button type="button" style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "none", cursor: misVehiculos.length === 0 ? "not-allowed" : "pointer", fontWeight: "600", fontSize: "13px", background: modoVehiculo === 'registrado' ? "#00f2fe" : "transparent", color: modoVehiculo === 'registrado' ? "#0f172a" : "#94a3b8" }} onClick={() => setModoVehiculo('registrado')} disabled={misVehiculos.length === 0}>Usar registrado</button>
+                  <button type="button" style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "13px", background: modoVehiculo === 'manual' ? "#00f2fe" : "transparent", color: modoVehiculo === 'manual' ? "#0f172a" : "#94a3b8" }} onClick={() => { setModoVehiculo('manual'); limpiarFormularioVehiculo(); }}>Ingresar manual</button>
+                </div>
+
+                {modoVehiculo === 'registrado' ? (
+                  <div>
+                    <select className="form-input" value={vehiculoSeleccionado} onChange={seleccionarVehiculo} style={{ width: "100%", padding: "12px", background: "#0f172a", border: "1px solid #334155", borderRadius: "10px", color: "#fff", marginBottom: "10px" }}>
+                      <option value="">-- Selecciona un vehículo --</option>
+                      {misVehiculos.map(v => (
+                        <option key={v.id} value={v.id}>{v.marca} {v.modelo} - {v.placa}</option>
+                      ))}
+                    </select>
+
+                    {vehiculoSeleccionado && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "15px", background: "rgba(0,0,0,0.2)", padding: "10px", borderRadius: "8px" }}>
+                        {imagenBase64 ? <img src={imagenBase64} alt="Auto" style={{ width: "60px", height: "60px", objectFit: "cover", borderRadius: "8px", border: "1px solid #00f2fe" }} /> : <div style={{ width: "60px", height: "60px", borderRadius: "8px", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}><FaCar size={24} color="#00f2fe" /></div>}
+                        <div>
+                          <p style={{ margin: 0, color: "#fff", fontWeight: "bold" }}>{form.marca} {form.modelo}</p>
+                          <p style={{ margin: "4px 0 0", color: "#00f2fe", fontSize: "12px", letterSpacing: "1px" }}>{form.placa}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="placa">Placa</label>
-                  <input
-                    id="placa"
-                    type="text"
-                    placeholder="Ej. ABC-123-D"
-                    maxLength={10}
-                    value={form.placa}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-
-                <button type="submit" className="btn-submit" disabled={saving}>
-                  {saving ? (
-                    <><FaSpinner className="spin" /> Guardando...</>
-                  ) : (
-                    <><FaSave /> Confirmar Reserva</>
-                  )}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ============ MODAL DE CANCELACIÓN ============ */}
-      {modalOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => !cancelando && setModalOpen(false)}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon">
-              <FaExclamationTriangle />
-            </div>
-            <h3>¿Cancelar Reserva?</h3>
-            <p>
-              Estás a punto de liberar tu cajón{" "}
-              <strong>{activeReserva?.espacio}</strong> del{" "}
-              <strong>{activeReserva?.estacionamiento}</strong>. Esta acción no se
-              puede deshacer y otra persona podría ocuparlo.
-            </p>
-            <div className="modal-buttons">
-              <button
-                className="btn-modal btn-modal-cancel"
-                onClick={() => setModalOpen(false)}
-                disabled={cancelando}
-              >
-                Volver atrás
-              </button>
-              <button
-                className="btn-modal btn-modal-confirm"
-                onClick={confirmarCancelacion}
-                disabled={cancelando}
-              >
-                {cancelando ? (
-                  <><FaSpinner className="spin" /> Cancelando...</>
                 ) : (
-                  <><FaTrash /> Sí, cancelar</>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div>
+                      <input id="marca" type="text" list="listaMarcas" placeholder="Marca (Ej. Nissan)" value={form.marca} onChange={handleChange} required style={{ width: "100%", padding: "12px", background: "#0f172a", border: "1px solid #334155", borderRadius: "10px", color: "#fff" }} />
+                      <datalist id="listaMarcas">{MARCAS.map((m) => <option key={m} value={m} />)}</datalist>
+                    </div>
+                    <input id="modelo" type="text" placeholder="Modelo (Ej. Versa)" value={form.modelo} onChange={handleChange} required style={{ width: "100%", padding: "12px", background: "#0f172a", border: "1px solid #334155", borderRadius: "10px", color: "#fff" }} />
+                    <input id="placa" type="text" placeholder="Placa (Ej. ABC-123)" maxLength={10} value={form.placa} onChange={handleChange} required style={{ width: "100%", padding: "12px", background: "#0f172a", border: "1px solid #334155", borderRadius: "10px", color: "#fff" }} />
+                    
+                    <div style={{ display: "flex", alignItems: "center", gap: "15px", marginTop: "10px" }}>
+                      <div style={{ position: "relative", width: "70px", height: "70px", borderRadius: "10px", background: "rgba(0,0,0,0.4)", border: "2px dashed #00f2fe", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                        {imagenBase64 ? <img src={imagenBase64} alt="Auto" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <FaCamera color="#00f2fe" size={24} />}
+                        <input type="file" accept="image/*" onChange={handleImageChange} style={{ position: "absolute", width: "100%", height: "100%", opacity: 0, cursor: "pointer" }} />
+                      </div>
+                      <span style={{ fontSize: "12px", color: "#94a3b8" }}>Sube una foto (Opcional)</span>
+                    </div>
+                  </div>
                 )}
+              </fieldset>
+
+              {/* BOTÓN CON EL TOTAL DINÁMICO */}
+              <button type="submit" className="btn-submit" disabled={saving || reservasActivas.length >= MAX_RESERVAS} style={{ marginTop: "20px" }}>
+                {saving 
+                  ? <><FaSpinner className="spin" /> Guardando...</> 
+                  : <><FaSave /> Confirmar Reserva y Pagar ${totalPagar}</>}
               </button>
-            </div>
+            </form>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ============ TOAST ============ */}
+      {/* TOAST */}
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.type === "success" ? <FaCheckCircle /> : <FaTimesCircle />}
@@ -499,7 +378,7 @@ export default function ReservarEspacio() {
         </div>
       )}
 
-      {/* ============ ESTILOS ============ */}
+      {/* ESTILOS */}
       <style>{`
         @keyframes fadeIn     { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeInUp   { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -511,9 +390,6 @@ export default function ReservarEspacio() {
         @keyframes headlight  { 0%,100% { box-shadow: 0 0 10px 2px rgba(255,231,100,.8); } 50% { box-shadow: 0 0 20px 6px rgba(255,231,100,1); } }
         @keyframes wheelSpin  { to { transform: rotate(720deg); } }
         @keyframes toastIn    { from { opacity: 0; transform: translateY(30px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes modalIn    { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
-        @keyframes overlayIn  { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes shake      { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
         @keyframes glow       { 0%,100% { box-shadow: 0 20px 60px rgba(0,0,0,.4); } 50% { box-shadow: 0 20px 70px rgba(0,242,254,.18); } }
 
         * { box-sizing: border-box; }
@@ -567,7 +443,6 @@ export default function ReservarEspacio() {
           transform: translateX(-3px);
         }
 
-        /* ============ CARD ============ */
         .reserva-card {
           display: grid;
           grid-template-columns: 280px 1fr;
@@ -579,7 +454,6 @@ export default function ReservarEspacio() {
           animation: fadeInUp .6s cubic-bezier(0.16,1,0.3,1), glow 5s ease-in-out infinite;
         }
 
-        /* ============ VISUAL / ESCENA ============ */
         .reserva-visual {
           display: flex;
           flex-direction: column;
@@ -646,16 +520,6 @@ export default function ReservarEspacio() {
         .wheel-bl { bottom: 16px; left: -8px; }
         .wheel-br { bottom: 16px; right: -8px; }
 
-        .reserva-hint {
-          color: #94a3b8;
-          font-size: 13px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          text-align: center;
-          margin: 0;
-        }
-
         .tips-box {
           background: rgba(0,242,254,.05);
           border: 1px solid rgba(0,242,254,.15);
@@ -692,7 +556,6 @@ export default function ReservarEspacio() {
           font-weight: bold;
         }
 
-        /* ============ FORMULARIO / INFO ============ */
         .reserva-info {
           display: flex;
           flex-direction: column;
@@ -708,7 +571,7 @@ export default function ReservarEspacio() {
         }
         .intro svg { color: #00f2fe; }
 
-        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
         .field label {
           color: #94a3b8;
           font-size: 12px;
@@ -720,7 +583,7 @@ export default function ReservarEspacio() {
           gap: 6px;
         }
         .field label svg { color: #00f2fe; }
-        .field input, .field select {
+        .field input, .field select, .form-input {
           width: 100%;
           padding: 12px 14px;
           background: #0f172a;
@@ -732,7 +595,7 @@ export default function ReservarEspacio() {
           transition: border-color .2s, box-shadow .2s, transform .15s;
           font-family: inherit;
         }
-        .field input:focus, .field select:focus {
+        .field input:focus, .field select:focus, .form-input:focus {
           border-color: #00f2fe;
           box-shadow: 0 0 0 3px rgba(0,242,254,.15);
           transform: translateY(-1px);
@@ -779,7 +642,7 @@ export default function ReservarEspacio() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: .5px;
-          margin-top: 8px;
+          margin-top: 15px;
           padding-bottom: 8px;
           border-bottom: 1px solid rgba(0,242,254,.15);
         }
@@ -809,179 +672,6 @@ export default function ReservarEspacio() {
         }
         .btn-submit:disabled { opacity: .7; cursor: not-allowed; }
 
-        /* ============ INFO RESERVA ACTIVA ============ */
-        .badge-active {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 14px;
-          background: rgba(16,185,129,.15);
-          color: #10b981;
-          border: 1px solid rgba(16,185,129,.4);
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 1px;
-          align-self: flex-start;
-          animation: pop .5s cubic-bezier(0.34,1.56,0.64,1);
-        }
-
-        .info-grid-2 {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 14px;
-        }
-        .info-item {
-          background: #0f172a;
-          border: 1px solid #334155;
-          border-radius: 10px;
-          padding: 12px 14px;
-          transition: border-color .2s;
-          animation: fadeInUp .5s ease backwards;
-        }
-        .info-item:hover { border-color: rgba(0,242,254,.4); }
-        .info-item label {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          color: #94a3b8;
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: .5px;
-          margin-bottom: 6px;
-        }
-        .info-item label svg { color: #00f2fe; }
-        .info-item p {
-          margin: 0;
-          color: #e2e8f0;
-          font-size: 15px;
-        }
-        .info-item.highlight {
-          border-color: rgba(0,242,254,.4);
-          background: rgba(0,242,254,.06);
-        }
-        .info-item .big-value {
-          color: #00f2fe;
-          font-size: 22px;
-          font-weight: 800;
-          letter-spacing: .5px;
-        }
-
-        .btn-cancel {
-          margin-top: 8px;
-          width: 100%;
-          padding: 13px;
-          background: rgba(239,68,68,.1);
-          color: #ef4444;
-          border: 1px solid rgba(239,68,68,.35);
-          border-radius: 10px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          transition: all .2s;
-          min-height: 46px;
-        }
-        .btn-cancel:hover {
-          background: rgba(239,68,68,.2);
-          transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(239,68,68,.25);
-        }
-
-        /* ============ MODAL ============ */
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,.8);
-          backdrop-filter: blur(6px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 10000;
-          padding: 20px;
-          animation: overlayIn .25s ease;
-        }
-        .modal {
-          background: #1e293b;
-          border: 1px solid rgba(0,242,254,.2);
-          border-radius: 18px;
-          padding: 32px 28px;
-          max-width: 420px;
-          width: 100%;
-          text-align: center;
-          box-shadow: 0 25px 70px rgba(0,0,0,.7);
-          animation: modalIn .3s cubic-bezier(0.34,1.56,0.64,1);
-        }
-        .modal-icon {
-          width: 68px; height: 68px;
-          margin: 0 auto 16px;
-          background: rgba(239,68,68,.15);
-          color: #ef4444;
-          border: 2px solid rgba(239,68,68,.4);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 30px;
-          animation: pop .5s cubic-bezier(0.34,1.56,0.64,1);
-        }
-        .modal h3 {
-          color: #e2e8f0;
-          font-size: 20px;
-          margin: 0 0 12px;
-        }
-        .modal p {
-          color: #94a3b8;
-          font-size: 14px;
-          line-height: 1.6;
-          margin: 0 0 24px;
-        }
-        .modal p strong { color: #00f2fe; }
-
-        .modal-buttons {
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-        }
-        .btn-modal {
-          flex: 1;
-          padding: 12px 20px;
-          border-radius: 10px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: all .2s;
-          min-height: 46px;
-          font-family: inherit;
-        }
-        .btn-modal:disabled { opacity: .6; cursor: not-allowed; }
-        .btn-modal-cancel {
-          background: transparent;
-          color: #94a3b8;
-          border: 1px solid #334155;
-        }
-        .btn-modal-cancel:hover:not(:disabled) {
-          background: rgba(255,255,255,.05);
-          color: #e2e8f0;
-        }
-        .btn-modal-confirm {
-          background: linear-gradient(135deg, #ef4444, #dc2626);
-          color: #fff;
-          border: none;
-        }
-        .btn-modal-confirm:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 25px rgba(239,68,68,.4);
-        }
-
-        /* ============ TOAST ============ */
         .toast {
           position: fixed;
           bottom: 24px;
@@ -1000,11 +690,9 @@ export default function ReservarEspacio() {
         .toast.success { background: #10b981; color: #0f172a; }
         .toast.error   { background: #ef4444; color: #fff; animation: toastIn .35s cubic-bezier(0.34,1.56,0.64,1), shake .4s ease .35s; }
 
-        /* ============ RESPONSIVE ============ */
         @media (max-width: 780px) {
           .reserva-card { grid-template-columns: 1fr; padding: 22px; }
           .parking-scene { width: 160px; height: 200px; }
-          .info-grid-2 { grid-template-columns: 1fr; }
           .row { grid-template-columns: 1fr; }
           .res-header h2 { font-size: 22px; }
           .input-with-action { flex-direction: column; }

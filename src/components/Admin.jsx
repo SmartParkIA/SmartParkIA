@@ -64,6 +64,9 @@ export default function Admin() {
 
   return (
     <div className="admin-container">
+      
+      {/* El Dashboard ya no está aquí, ahora vive en Finanzas.jsx */}
+
       <h2>Gestión de Usuarios</h2>
       
       <div className="table-container">
