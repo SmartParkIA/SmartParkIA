@@ -8,7 +8,7 @@ import {
 } from "react-icons/fa";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
-import AsistenteVirtual from "./AsistenteVirtual";
+import AsistenteVirtual from "./AsistenteVirtual"; // <-- Importación
 import "../styles/layout.css";
 
 export default function Layout() {
@@ -56,7 +56,7 @@ export default function Layout() {
     if (path.includes("historial")) return "Historial";
     if (path.includes("estacionamientos")) return "Estacionamientos";
     if (path.includes("disponibilidad")) return "Disponibilidad";
-    if (path.includes("finanzas")) return "Finanzas"; 
+    if (path.includes("finanzas")) return "Finanzas";
     if (path.includes("registrar-estacionamiento")) return "Registrar Estacionamiento";
     if (path.includes("admin")) return "Panel de Administración";
     return "SmartPark IA";
@@ -65,6 +65,7 @@ export default function Layout() {
   return (
     <div className={`layout-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
       
+      {/* ====== SIDEBAR ====== */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-container">
@@ -84,11 +85,9 @@ export default function Layout() {
           {/* --- MENÚ PARA USUARIOS NORMALES --- */}
           {!isAdmin && (
             <>
-              {/* AHORA "MI VEHÍCULO" SOLO SE VE PARA USUARIOS */}
               <Link to="/mis-vehiculos" className={isActive("/mis-vehiculos")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaCar /> Mi Vehículo
               </Link>
-
               <Link to="/reservar" className={isActive("/reservar")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaCalendarAlt /> Reservar Espacio
               </Link>
@@ -113,11 +112,9 @@ export default function Layout() {
               <Link to="/admin" className={isActive("/admin")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaCog /> Gestión de Usuarios
               </Link>
-              
               <Link to="/finanzas" className={isActive("/finanzas")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaChartPie /> Finanzas
               </Link>
-
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClipboardList /> Registrar Estacionamiento
               </Link>
@@ -141,8 +138,10 @@ export default function Layout() {
         </div>
       </aside>
 
+      {/* Overlay para móviles */}
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
+      {/* ====== CONTENIDO PRINCIPAL ====== */}
       <div className="main-content">
         <header className="navbar">
           <div className="navbar-left">
@@ -174,6 +173,7 @@ export default function Layout() {
         </div>
       </div>
 
+      {/* ====== ASISTENTE VIRTUAL (SOLO PARA USUARIOS) ====== */}
       {!isAdmin && <AsistenteVirtual />}
 
     </div>
