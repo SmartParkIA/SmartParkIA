@@ -14,7 +14,19 @@ class ErrorOcupado extends Error {}
  * reservar el mismo cajón a la misma hora.
  * Devuelve el código de la reserva (6 caracteres).
  */
-export async function crearReservaEspacio({ usuario, estacionamiento, espacio, fecha, horario, duracion }) {
+export async function crearReservaEspacio({ 
+  usuario, 
+  estacionamiento, 
+  espacio, 
+  fecha, 
+  horario, 
+  duracion,
+  // NUEVOS PARÁMETROS DEL VEHÍCULO:
+  marca = '',
+  modelo = '',
+  placa = '',
+  imagen = ''
+}) {
   if (USAR_DEMO) {
     await new Promise((r) => setTimeout(r, 600))
     return Math.random().toString(36).slice(2, 8).toUpperCase()
@@ -33,6 +45,8 @@ export async function crearReservaEspacio({ usuario, estacionamiento, espacio, f
       bloques.forEach((ref) =>
         tx.set(ref, { userId: usuario.uid, reservaId: reservaRef.id, creadaEn: serverTimestamp() }),
       )
+      
+      // Guardamos la reserva con los datos del vehículo incluidos
       tx.set(reservaRef, {
         userId: usuario.uid,
         userEmail: usuario.email ?? '',
@@ -43,6 +57,12 @@ export async function crearReservaEspacio({ usuario, estacionamiento, espacio, f
         duracionHoras: Number(duracion),
         estado: 'activa',
         creadaEn: serverTimestamp(),
+        
+        // NUEVOS CAMPOS AQUÍ:
+        vehiculoMarca: marca.trim(),
+        vehiculoModelo: modelo.trim(),
+        vehiculoPlaca: placa.trim(),
+        vehiculoImagen: imagen // Base64 o URL
       })
     })
   } catch (error) {

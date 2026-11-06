@@ -44,8 +44,30 @@ export default function Registro() {
   const strengthLabel = ["Muy débil", "Débil", "Aceptable", "Buena", "Fuerte", "Excelente"][strength];
   const strengthColor = ["#ef4444", "#ef4444", "#f59e0b", "#f59e0b", "#10b981", "#10b981"][strength];
 
+  // --- NUEVA FUNCIÓN PARA CALCULAR LA EDAD ---
+  const calcularEdad = (fechaNacimiento) => {
+    const hoy = new Date();
+    const cumpleanos = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - cumpleanos.getFullYear();
+    const mes = hoy.getMonth() - cumpleanos.getMonth();
+    // Si el mes actual es menor al de nacimiento, o es el mismo mes pero aún no ha pasado el día del cumpleaños, restamos 1 año
+    if (mes < 0 || (mes === 0 && hoy.getDate() < cumpleanos.getDate())) {
+      edad--;
+    }
+    return edad;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // --- VALIDACIÓN DE EDAD ---
+    const edad = calcularEdad(form.fechaNacimiento);
+    if (edad < 18) {
+      setTipo("error");
+      setMensaje("Debes ser mayor de 18 años para registrarte en SmartPark IA.");
+      return; // Detenemos la ejecución aquí
+    }
+
     setLoading(true);
     setTipo("info");
     setMensaje("Registrando usuario y enviando correo...");
@@ -93,6 +115,11 @@ export default function Registro() {
       setLoading(false);
     }
   };
+
+  // Calculamos la fecha máxima permitida (hoy menos 18 años)
+  const hoy = new Date();
+  hoy.setFullYear(hoy.getFullYear() - 18);
+  const fechaMaxima = hoy.toISOString().split("T")[0];
 
   return (
     <div className="reg-page">
@@ -147,6 +174,7 @@ export default function Registro() {
               type="date"
               value={form.fechaNacimiento}
               onChange={handleChange}
+              max={fechaMaxima} // <-- RESTRICCIÓN EN EL CALENDARIO
               required
             />
 
