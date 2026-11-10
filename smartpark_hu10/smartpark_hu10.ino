@@ -1,13 +1,13 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <ESP32Servo.h> // Librería para manejar servos en ESP32
 
 // ==========================================
 // 1. CONFIGURACIÓN DE RED Y HIVEMQ
 // ==========================================
-const char* ssid = "INFINITUM51E3_2.4";          // Tu red WiFi
-const char* password = "J4qUNSkh5T";    // Tu contraseña WiFi
+const char* ssid = "INFINITUM51E3_2.4";          
+const char* password = "J4qUNSkh5T";    
 
-// Datos del Broker HiveMQ
 const char* mqtt_server = "broker.hivemq.com"; 
 const int mqtt_port = 1883;                  
 
@@ -22,7 +22,7 @@ const int TRIG_PIN_1 = 5;
 const int ECHO_PIN_1 = 18;
 const char* mqtt_topic_1 = "smartpark/cajones/cajon_1/estado";
 bool estadoOcupadoAnterior_1 = false;
-const int DISTANCIA_UMBRAL_CM = 17; // Reducido a la mitad (aprox 17 cm) para evitar la pared
+const int DISTANCIA_UMBRAL_CM = 17; 
 
 // Cajón 2 (Ultrasónico)
 const int TRIG_PIN_2 = 19;
@@ -35,8 +35,39 @@ const int SENSOR_IR_PIN_3 = 22;
 const char* mqtt_topic_3 = "smartpark/cajones/cajon_3/estado";
 bool estadoOcupadoAnterior_3 = false;
 
+// Servomotor para la Barrera (HU-19)
+const int SERVO_PIN = 23;
+Servo barreraServo;
+const char* mqtt_topic_control_servo = "smartpark/barrera/control"; // Tópico para abrir/cerrar desde backend
+
 // ==========================================
-// 3. FUNCIONES DE CONEXIÓN
+// 3. CALLBACK MQTT (Para recibir comandos de apertura)
+// ==========================================
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String mensaje = "";
+  for (int i = 0; i < length; i++) {
+    mensaje += (char)payload[i];
+  }
+
+  Serial.print("Mensaje MQTT recibido [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(mensaje);
+
+  // Si el backend envía la orden de abrir el acceso
+  if (String(topic) == mqtt_topic_control_servo) {
+    if (mensaje == "ABRIR") {
+      Serial.println("¡Acceso autorizado! Abriendo barrera...");
+      barreraServo.write(90); // Abre la barrera a 90 grados
+      delay(4000);            // Mantiene abierta 4 segundos (tiempo configurable)
+      barreraServo.write(0);  // Cierra la barrera automáticamente a 0 grados
+      Serial.println("Barrera cerrada.");
+    }
+  }
+}
+
+// ==========================================
+// 4. FUNCIONES DE CONEXIÓN
 // ==========================================
 void setupWiFi() {
   delay(10);
@@ -61,6 +92,7 @@ void reconnectMQTT() {
 
     if (client.connect(clientId.c_str())) {
       Serial.println("Conectado exitosamente a HiveMQ!");
+      client.subscribe(mqtt_topic_control_servo); // Suscribirse al canal de control de la barrera
     } else {
       Serial.print("Fallo conexion MQTT, rc=");
       Serial.print(client.state());
@@ -71,23 +103,27 @@ void reconnectMQTT() {
 }
 
 // ==========================================
-// 4. SETUP Y LOOP PRINCIPAL
+// 5. SETUP Y LOOP PRINCIPAL
 // ==========================================
 void setup() {
   Serial.begin(115200);
 
-  // Configurar sensores ultrasónicos (Cajón 1 y 2)
+  // Inicializar servomotor
+  ESP32PWM::allocateTimer(0);
+  barreraServo.setPeriodHertz(50); // Frecuencia estándar para servos (50Hz)
+  barreraServo.attach(SERVO_PIN, 500, 2400);
+  barreraServo.write(0); // Iniciar con la barrera cerrada
+
+  // Configurar sensores ultrasónicos y LED
   pinMode(TRIG_PIN_1, OUTPUT);
   pinMode(ECHO_PIN_1, INPUT);
-  
   pinMode(TRIG_PIN_2, OUTPUT);
   pinMode(ECHO_PIN_2, INPUT);
-  
-  // Configurar sensor infrarrojo (Cajón 3)
   pinMode(SENSOR_IR_PIN_3, INPUT);
 
   setupWiFi();
   client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(mqttCallback); // Activar la función que escucha mensajes
 }
 
 void loop() {
@@ -119,8 +155,6 @@ void loop() {
     payload += "}";
 
     client.publish(mqtt_topic_1, payload.c_str());
-    Serial.print("Enviado MQTT (cajon_1): ");
-    Serial.println(payload);
   }
 
   delay(100);
@@ -136,7 +170,7 @@ void loop() {
 
   long duracion2 = pulseIn(ECHO_PIN_2, HIGH, 30000);
   float distanciaCm2 = (duracion2 == 0) ? 999.0 : (duracion2 * 0.034 / 2);
-  bool estaOcupadoActual2 = (distanciaCm2 > 0 && distanciaCm2 <= DISTANCIA_UMBRAL_CM);
+  bool estaOcupadoActual2 = (duracion2 > 0 && distanciaCm2 <= DISTANCIA_UMBRAL_CM);
 
   if (estaOcupadoActual2 != estadoOcupadoAnterior_2) {
     estadoOcupadoAnterior_2 = estaOcupadoActual2;
@@ -148,34 +182,27 @@ void loop() {
     payload += "}";
 
     client.publish(mqtt_topic_2, payload.c_str());
-    Serial.print("Enviado MQTT (cajon_2): ");
-    Serial.println(payload);
   }
 
   delay(100);
 
   // ==========================================
   // LECTURA SENSOR 3 (Infrarrojo - Cajón 3)
+  // =================================omotor
   // ==========================================
   int valorIR = digitalRead(SENSOR_IR_PIN_3);
-  
-  // Nota: Si tu módulo IR manda LOW cuando detecta objeto, se queda como 'LOW'.
-  // Si notas que funciona al revés, solo cambia 'LOW' por 'HIGH'.
   bool estaOcupadoActual3 = (valorIR == LOW); 
 
   if (estaOcupadoActual3 != estadoOcupadoAnterior_3) {
     estadoOcupadoAnterior_3 = estaOcupadoActual3;
 
-    // Enviamos el JSON compatible con tu backend de Node.js
     String payload = "{";
     payload += "\"cajonId\": \"cajon_3\",";
     payload += "\"ocupado\": " + String(estaOcupadoActual3 ? "true" : "false") + ",";
-    payload += "\"distancia\": " + String(estaOcupadoActual3 ? 5.0 : 50.0); // Simula una distancia pequeña o grande para el JSON
+    payload += "\"distancia\": " + String(estaOcupadoActual3 ? 5.0 : 50.0);
     payload += "}";
 
     client.publish(mqtt_topic_3, payload.c_str());
-    Serial.print("Enviado MQTT (cajon_3 IR): ");
-    Serial.println(payload);
   }
 
   delay(500);
