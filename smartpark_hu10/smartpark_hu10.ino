@@ -22,7 +22,7 @@ const int TRIG_PIN_1 = 5;
 const int ECHO_PIN_1 = 18;
 const char* mqtt_topic_1 = "smartpark/cajones/cajon_1/estado";
 bool estadoOcupadoAnterior_1 = false;
-const int DISTANCIA_UMBRAL_CM = 35; // Umbral para ultrasonido
+const int DISTANCIA_UMBRAL_CM = 17; // Reducido a la mitad (aprox 17 cm) para evitar la pared
 
 // Cajón 2 (Ultrasónico)
 const int TRIG_PIN_2 = 19;
