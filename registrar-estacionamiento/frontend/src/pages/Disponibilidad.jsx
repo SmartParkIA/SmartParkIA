@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 
 import {
@@ -10,7 +9,8 @@ import {
   Clock,
   Radio,
   Wifi,
-  WifiOff
+  WifiOff,
+  Sparkles
 } from "lucide-react";
 
 import {
@@ -26,6 +26,9 @@ function Disponibilidad() {
   const [espacios, setEspacios] = useState([]);
   const [conexion, setConexion] = useState("conectando");
   const [ultimoMensaje, setUltimoMensaje] = useState(null);
+  
+  // Estado nuevo para la predicción de la IA (sin afectar lo demás)
+  const [prediccion, setPrediccion] = useState(null);
 
   useEffect(() => {
     const referencia = collection(db, "lugares");
@@ -91,6 +94,25 @@ function Disponibilidad() {
     );
 
     return () => cancelarSuscripcion();
+  }, []);
+
+  // Efecto independiente para consultar la API de predicción (Bridge)
+  useEffect(() => {
+    async function obtenerPrediccionIA() {
+      try {
+        // Asegúrate de que tu backend smartpark-bridge esté corriendo en el puerto 3000 (o el que uses)
+        const respuesta = await fetch("http://localhost:3000/api/v1/prediccion/ocupacion");
+        const resultado = await respuesta.json();
+        
+        if (resultado.status === "success") {
+          setPrediccion(resultado.data);
+        }
+      } catch (error) {
+        console.error("No se pudo conectar con la API de predicción:", error);
+      }
+    }
+
+    obtenerPrediccionIA();
   }, []);
 
   const total = espacios.length;
@@ -214,6 +236,31 @@ function Disponibilidad() {
             <div>
               <strong>{ocupados}</strong>
               <CarFront size={24} />
+            </div>
+          </article>
+        </section>
+
+        {/* --- NUEVA TARJETA DE PREDICCIÓN IA (Integración Tarea 065/066) --- */}
+        <section className="disp-estadisticas" style={{ marginTop: "15px" }}>
+          <article className="disp-card" style={{ gridColumn: "1 / -1", background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)", borderLeft: "4px solid #4f46e5" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+              <div>
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#4f46e5", fontWeight: "600", marginBottom: "4px" }}>
+                  <Sparkles size={16} /> Pronóstico de Ocupación Inteligente (IA)
+                </span>
+                {prediccion ? (
+                  <p style={{ fontSize: "0.9rem", color: "#4b5563", margin: "4px 0 0 0" }}>
+                    Estimado para el día <strong>{prediccion.diaSemana}</strong> a las <strong>{prediccion.horaConsulta} hrs</strong>: <strong style={{ color: "#1f2937" }}>{prediccion.porcentajeEstimado}% de ocupación</strong> ({prediccion.nivelSaturacion})
+                  </p>
+                ) : (
+                  <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0 0" }}>Cargando pronóstico desde el backend...</p>
+                )}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <strong style={{ fontSize: "1.5rem", color: "#4f46e5" }}>
+                  {prediccion ? `${prediccion.porcentajeEstimado}%` : "..."}
+                </strong>
+              </div>
             </div>
           </article>
         </section>
