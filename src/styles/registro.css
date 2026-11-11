@@ -1,0 +1,415 @@
+/* src/styles/registro.css */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+/* =========================================
+   1. VARIABLES Y RESET BÁSICO
+   ========================================= */
+:root {
+    --bg-deep: #03060d;
+    --card-surface: rgba(15, 23, 42, 0.82);
+    --border-line: rgba(255, 255, 255, 0.12);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    
+    --neon-cyan: #00f2fe;
+    --neon-blue: #0072ff;
+    --neon-glow: rgba(0, 242, 254, 0.35);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* =========================================
+   2. FONDOS ANIMADOS (LOGIN Y REGISTRO)
+   ========================================= */
+.login-page,
+.reg-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-height: 100vh;
+    padding: 40px 20px;
+    background-color: var(--bg-deep);
+    font-family: 'Outfit', "Segoe UI", system-ui, sans-serif;
+    color: var(--text-primary);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Luces flotantes en el fondo */
+.login-page::before,
+.login-page::after,
+.reg-page::before,
+.reg-page::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.login-page::before,
+.reg-page::before {
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, var(--neon-cyan) 0%, rgba(0, 242, 254, 0) 70%);
+    top: 8%;
+    left: 12%;
+    animation: floatCyan 10s ease-in-out infinite alternate;
+}
+
+.login-page::after,
+.reg-page::after {
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle, var(--neon-blue) 0%, rgba(0, 114, 255, 0) 70%);
+    bottom: 8%;
+    right: 12%;
+    animation: floatBlue 12s ease-in-out infinite alternate;
+}
+
+@keyframes floatCyan {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(80px, 50px) scale(1.2); }
+    100% { transform: translate(-40px, 90px) scale(0.9); }
+}
+
+@keyframes floatBlue {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-90px, -60px) scale(1.15); }
+    100% { transform: translate(50px, -40px) scale(0.95); }
+}
+
+/* =========================================
+   3. TARJETAS GLASSMORPHISM
+   ========================================= */
+.card,
+.reg-card {
+    position: relative;
+    z-index: 1;
+    background: var(--card-surface);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    padding: 36px 32px;
+    border-radius: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px var(--neon-glow);
+    border: 1px solid var(--border-line);
+    
+    width: 100%;
+    max-width: 420px; /* Ligeramente más ancha para el registro */
+    margin: auto;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover,
+.reg-card:hover {
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(0, 242, 254, 0.5);
+}
+
+.reg-card.is-success {
+    animation: pop 0.5s ease;
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* =========================================
+   4. TÍTULOS Y TEXTOS
+   ========================================= */
+h2 {
+    text-align: center;
+    color: #ffffff;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    font-size: 26px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #ffffff 30%, var(--neon-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.4));
+}
+
+.subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: -10px 0 20px;
+}
+
+/* =========================================
+   5. FORMULARIOS E INPUTS
+   ========================================= */
+label {
+    display: block;
+    margin-top: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+input {
+    width: 100%;
+    padding: 12px 16px;
+    margin-top: 6px;
+    background: rgba(3, 7, 18, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: #fff;
+    box-sizing: border-box;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Outfit', sans-serif;
+}
+
+input::placeholder {
+    color: rgba(148, 163, 184, 0.5);
+}
+
+input:hover {
+    border-color: rgba(0, 242, 254, 0.3);
+    background: rgba(3, 7, 18, 0.8);
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 16px var(--neon-glow), inset 0 0 8px rgba(0, 242, 254, 0.1);
+    background: rgba(3, 7, 18, 0.95);
+    transform: translateY(-1px);
+}
+
+/* Filas para Apellidos */
+.row {
+    display: flex;
+    gap: 15px;
+}
+.col {
+    flex: 1;
+}
+
+/* =========================================
+   6. CONTRASEÑA Y OJO
+   ========================================= */
+.password-container {
+    position: relative;
+    width: 100%;
+}
+
+.password-container input {
+    padding-right: 44px;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 55%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.toggle-password:hover {
+    background: rgba(0, 242, 254, 0.1);
+}
+
+/* Barra de fuerza de contraseña */
+.strength {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    font-size: 12px;
+}
+.strength .bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.strength .fill {
+    height: 100%;
+    transition: width 0.4s ease, background 0.4s ease;
+}
+
+/* =========================================
+   7. BOTONES
+   ========================================= */
+button[type="submit"],
+.submit-btn {
+    position: relative;
+    width: 100%;
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan));
+    color: #03060d;
+    font-weight: 800;
+    border: none;
+    padding: 14px;
+    margin-top: 26px;
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 242, 254, 0.3);
+    overflow: hidden;
+    font-family: 'Outfit', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+}
+
+button[type="submit"]::before,
+.submit-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s ease;
+}
+
+button[type="submit"]:hover::before,
+.submit-btn:hover::before {
+    left: 100%;
+}
+
+button[type="submit"]:hover,
+.submit-btn:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 25px rgba(0, 242, 254, 0.6);
+    filter: brightness(1.1);
+}
+
+button[type="submit"]:active,
+.submit-btn:active {
+    transform: translateY(0) scale(0.99);
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
+}
+
+button[type="submit"]:disabled,
+.submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* =========================================
+   8. MENSAJES Y ENLACES
+   ========================================= */
+#mensaje,
+.msg {
+    margin-top: 18px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.msg.info { color: var(--neon-cyan); }
+.msg.ok { color: #10b981; }
+.msg.error { color: #ef4444; animation: shake 0.4s ease; }
+
+.success-box {
+    text-align: center;
+    padding: 20px 0;
+    color: var(--text-primary);
+}
+.success-box h3 {
+    color: #10b981;
+    margin: 16px 0 8px;
+    font-size: 22px;
+}
+.success-box .redirect {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 16px;
+}
+
+.link {
+    text-align: center;
+    margin-top: 22px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.link a {
+    color: var(--neon-cyan);
+    text-decoration: none;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.link a:hover {
+    text-decoration: underline;
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+/* =========================================
+   9. ANIMACIONES EXTRA
+   ========================================= */
+@keyframes pop {
+    0%   { transform: scale(0); }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-6px); }
+    75%      { transform: translateX(6px); }
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(15, 23, 42, 0.3);
+    border-top-color: #0f172a;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.pop { animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* =========================================
+   10. RESPONSIVE
+   ========================================= */
+@media (max-width: 480px) {
+    .card,
+    .reg-card {
+        padding: 30px 20px;
+        border-radius: 20px;
+        max-width: 95%;
+    }
+    h2 {
+        font-size: 22px;
+    }
+    .row {
+        flex-direction: column;
+        gap: 0;
+    }
+}

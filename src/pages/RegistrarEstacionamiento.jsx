@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   MapPin,
@@ -9,10 +8,9 @@ import {
   CheckCircle2,
   AlertCircle,
   RotateCcw,
-  Save,
-  ParkingSquare
+  Save
 } from "lucide-react";
-import "../App.css";
+import "../styles/RegistrarEstacionamiento.css";
 
 const formularioInicial = {
   nombre: "",
@@ -122,33 +120,19 @@ function RegistrarEstacionamiento() {
 
   return (
     <div className="pagina">
-      <header className="encabezado">
-        <div className="marca">
-          <div className="marca-icono">
-            <ParkingSquare size={28} />
-          </div>
-
-          <div>
-            <h1>ParkAdmin</h1>
-            <p>Administración de estacionamientos</p>
-          </div>
-        </div>
-
-        <span className="etiqueta-admin">Panel administrativo</span>
-      </header>
-
       <main className="contenido">
+        {/* Migas de pan (Breadcrumbs) */}
         <div className="ruta">
           <span>Administración</span>
           <span>/</span>
           <strong>Registrar estacionamiento</strong>
         </div>
 
+        {/* Introducción */}
         <section className="introduccion">
           <div className="introduccion-icono">
             <Building2 size={27} />
           </div>
-
           <div>
             <h2>Registrar nueva sede</h2>
             <p>
@@ -158,6 +142,7 @@ function RegistrarEstacionamiento() {
           </div>
         </section>
 
+        {/* Formulario */}
         <form
           className="formulario"
           onSubmit={registrarEstacionamiento}
@@ -228,9 +213,7 @@ function RegistrarEstacionamiento() {
 
           <div className="rejilla">
             <div className="campo">
-              <label htmlFor="capacidad">
-                Capacidad de vehículos *
-              </label>
+              <label htmlFor="capacidad">Capacidad de vehículos *</label>
               <input
                 id="capacidad"
                 name="capacidad"
@@ -335,10 +318,6 @@ function RegistrarEstacionamiento() {
           La información se guardará en la base de datos del sistema.
         </p>
       </main>
-
-      <footer className="pie">
-        ParkAdmin · Módulo de administración de estacionamientos
-      </footer>
     </div>
   );
 }

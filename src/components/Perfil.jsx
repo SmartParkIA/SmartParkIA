@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/config.js";
+import { useEffect, useState } from "react";
 import {
-  FaBars, FaTimes, FaHome, FaParking, FaCalendarAlt, FaUser,
-  FaCog, FaSignOutAlt, FaCamera, FaEnvelope, FaUserShield,
-  FaSpinner, FaCheckCircle, FaExclamationCircle,
+  FaCamera,
+  FaCheckCircle,
+  FaEnvelope,
+  FaExclamationCircle,
+  FaSpinner,
+  FaUser,
+  FaUserShield
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
+import { auth, db } from "../firebase/config.js";
 
 export default function Perfil() {
   const navigate = useNavigate();
@@ -15,7 +19,6 @@ export default function Perfil() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -39,13 +42,13 @@ export default function Perfil() {
     return () => unsub();
   }, [navigate]);
 
-  // --- Toast interno (reemplazo de toast.js) ---
+  // --- Toast interno ---
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // --- Subir foto (base64 a Firestore) ---
+  // --- Subir foto ---
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -77,11 +80,6 @@ export default function Perfil() {
     reader.readAsDataURL(file);
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/login", { replace: true });
-  };
-
   // --- Datos derivados ---
   const nombreCompleto =
     `${userData?.nombres || ""} ${userData?.apellidoPaterno || ""} ${userData?.apellidoMaterno || ""}`
@@ -93,134 +91,63 @@ export default function Perfil() {
       userData?.nombres || "U"
     )}&background=0072ff&color=fff&size=130`;
 
-  // --- Render ---
+  // --- Render (Sin menú lateral ni navbar) ---
   return (
-    <div className="perfil-page">
-      {/* ====== SIDEBAR ====== */}
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="sidebar-header">
-          <h3>SmartPark IA</h3>
-          <button
-            className="close-btn"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Cerrar menú"
-          >
-            <FaTimes />
-          </button>
+    <div className="perfil-container">
+      <h2 className="title">Mi Información Personal</h2>
+
+      {loading ? (
+        <div className="loader">
+          <FaSpinner className="spin" size={32} color="#00f2fe" />
+          <p>Cargando perfil...</p>
         </div>
+      ) : (
+        <div className="profile-card">
+          {/* --- Avatar --- */}
+          <div className="avatar-container">
+            <div className="avatar-wrapper">
+              <img src={avatarSrc} alt="Avatar" className="avatar" />
+              <label htmlFor="fileInput" className="avatar-overlay">
+                {uploading ? <FaSpinner className="spin" /> : <FaCamera />}
+              </label>
+              <input
+                type="file"
+                id="fileInput"
+                accept="image/*"
+                onChange={handleFileChange}
+                hidden
+              />
+            </div>
+            <label htmlFor="fileInput" className="upload-btn">
+              {uploading ? "Subiendo..." : "Cambiar Foto"}
+            </label>
+          </div>
 
-        <nav className="sidebar-nav">
-          <Link to="/" onClick={() => setSidebarOpen(false)}>
-            <FaHome /> Inicio
-          </Link>
-          <Link to="/reservar" onClick={() => setSidebarOpen(false)}>
-            <FaCalendarAlt /> Reservar
-          </Link>
-          <Link to="/perfil" className="active" onClick={() => setSidebarOpen(false)}>
-            <FaUser /> Mi perfil
-          </Link>
-          <Link to="/Estacionamientos" onClick={() => setSidebarOpen(false)}>
-            <FaParking /> Estacionamientos
-          </Link>
-             <Link to="/VerReserva" onClick={() => setSidebarOpen(false)}>
-              <FaCog /> ver reservas
-            </Link>
-             
-             <Link to="/Historial" onClick={() => setSidebarOpen(false)}>
-              <FaCog /> Historial
-            </Link>
-          {userData?.rol === "admin" && (
-            <Link to="/admin" onClick={() => setSidebarOpen(false)}>
-              <FaCog /> Admin
-            </Link>
-          
-            
-          )}
-        </nav>
-
-        <button className="logout-btn" onClick={handleLogout}>
-          <FaSignOutAlt /> Cerrar sesión
-        </button>
-      </aside>
-
-      {sidebarOpen && (
-        <div className="overlay" onClick={() => setSidebarOpen(false)} />
+          {/* --- Info --- */}
+          <div className="info-grid">
+            <div className="info-group">
+              <label>
+                <FaUser /> Nombres y Apellidos
+              </label>
+              <p>{nombreCompleto}</p>
+            </div>
+            <div className="info-group">
+              <label>
+                <FaEnvelope /> Correo Electrónico
+              </label>
+              <p>{userData?.correo || user?.email || "—"}</p>
+            </div>
+            <div className="info-group">
+              <label>
+                <FaUserShield /> Rol en el Sistema
+              </label>
+              <p className="role-badge">
+                {userData?.rol || "usuario"}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* ====== CONTENIDO PRINCIPAL ====== */}
-      <div className="main-content">
-        <header className="navbar">
-          <button
-            className="menu-toggle"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Abrir menú"
-          >
-            <FaBars />
-          </button>
-          <span className="navbar-brand">SmartPark IA</span>
-        </header>
-
-        <div className="container">
-          <h2 className="title">Mi Información Personal</h2>
-
-          {loading ? (
-            <div className="loader">
-              <FaSpinner className="spin" size={32} color="#00f2fe" />
-              <p>Cargando perfil...</p>
-            </div>
-          ) : (
-            <div className="profile-card">
-              {/* --- Avatar --- */}
-              <div className="avatar-container">
-                <div className="avatar-wrapper">
-                  <img src={avatarSrc} alt="Avatar" className="avatar" />
-                  <label htmlFor="fileInput" className="avatar-overlay">
-                    {uploading ? (
-                      <FaSpinner className="spin" />
-                    ) : (
-                      <FaCamera />
-                    )}
-                  </label>
-                  <input
-                    type="file"
-                    id="fileInput"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    hidden
-                  />
-                </div>
-                <label htmlFor="fileInput" className="upload-btn">
-                  {uploading ? "Subiendo..." : "Cambiar Foto"}
-                </label>
-              </div>
-
-              {/* --- Info --- */}
-              <div className="info-grid">
-                <div className="info-group">
-                  <label>
-                    <FaUser /> Nombres y Apellidos
-                  </label>
-                  <p>{nombreCompleto}</p>
-                </div>
-                <div className="info-group">
-                  <label>
-                    <FaEnvelope /> Correo Electrónico
-                  </label>
-                  <p>{userData?.correo || user?.email || "—"}</p>
-                </div>
-                <div className="info-group">
-                  <label>
-                    <FaUserShield /> Rol en el Sistema
-                  </label>
-                  <p className="role-badge">
-                    {userData?.rol || "usuario"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* ====== TOAST ====== */}
       {toast && (
@@ -230,161 +157,18 @@ export default function Perfil() {
         </div>
       )}
 
-      {/* ====== ESTILOS ====== */}
+      {/* ====== ESTILOS ESPECÍFICOS DEL PERFIL ====== */}
       <style>{`
-        @keyframes fadeIn    { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeInUp  { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideIn   { from { transform: translateX(-100%); } to { transform: translateX(0); } }
         @keyframes spin      { to { transform: rotate(360deg); } }
         @keyframes pop       { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
         @keyframes toastIn   { from { opacity: 0; transform: translateY(30px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes glow      { 0%, 100% { box-shadow: 0 20px 60px rgba(0,0,0,0.4); } 50% { box-shadow: 0 20px 70px rgba(0,242,254,0.2); } }
 
         * { box-sizing: border-box; }
-        .perfil-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-          font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
-          color: #e2e8f0;
-          animation: fadeIn 0.4s ease;
-          display: flex;
-        }
+        .perfil-container { width: 100%; animation: fadeIn 0.4s ease; }
         .spin { animation: spin 1s linear infinite; }
 
-        /* ===== Sidebar ===== */
-        .sidebar {
-          position: fixed;
-          top: 0; left: 0;
-          height: 100vh;
-          width: 260px;
-          background: #0b1220;
-          border-right: 1px solid rgba(0, 242, 254, 0.15);
-          padding: 20px;
-          display: flex;
-          flex-direction: column;
-          transform: translateX(-100%);
-          transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-          z-index: 100;
-        }
-        .sidebar.open { transform: translateX(0); animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-        .sidebar-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 30px;
-        }
-        .sidebar-header h3 {
-          color: #00f2fe;
-          margin: 0;
-          font-size: 20px;
-        }
-        .close-btn {
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          font-size: 20px;
-          cursor: pointer;
-          transition: color 0.2s, transform 0.2s;
-        }
-        .close-btn:hover { color: #00f2fe; transform: rotate(90deg); }
-
-        .sidebar-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          flex: 1;
-        }
-        .sidebar-nav a {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 14px;
-          color: #94a3b8;
-          text-decoration: none;
-          border-radius: 8px;
-          font-size: 15px;
-          transition: background 0.2s, color 0.2s, transform 0.15s;
-        }
-        .sidebar-nav a:hover {
-          background: rgba(0, 242, 254, 0.08);
-          color: #00f2fe;
-          transform: translateX(4px);
-        }
-        .sidebar-nav a.active {
-          background: rgba(0, 242, 254, 0.15);
-          color: #00f2fe;
-          font-weight: 500;
-        }
-
-        .logout-btn {
-          background: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 8px;
-          padding: 12px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          font-size: 14px;
-          font-weight: 500;
-          transition: background 0.2s, transform 0.15s;
-        }
-        .logout-btn:hover {
-          background: rgba(239, 68, 68, 0.2);
-          transform: translateY(-1px);
-        }
-
-        .overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.6);
-          z-index: 99;
-          animation: fadeIn 0.3s ease;
-        }
-
-        /* ===== Main ===== */
-        .main-content { flex: 1; width: 100%; }
-
-        .navbar {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          padding: 18px 24px;
-          background: rgba(15, 23, 42, 0.8);
-          backdrop-filter: blur(8px);
-          border-bottom: 1px solid rgba(0, 242, 254, 0.1);
-          position: sticky;
-          top: 0;
-          z-index: 50;
-        }
-        .menu-toggle {
-          background: rgba(0, 242, 254, 0.1);
-          border: 1px solid rgba(0, 242, 254, 0.25);
-          color: #00f2fe;
-          font-size: 18px;
-          padding: 10px 14px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: background 0.2s, transform 0.15s;
-        }
-        .menu-toggle:hover {
-          background: rgba(0, 242, 254, 0.2);
-          transform: scale(1.05);
-        }
-        .navbar-brand {
-          color: #00f2fe;
-          font-weight: 700;
-          font-size: 20px;
-          letter-spacing: 0.5px;
-        }
-
-        .container {
-          padding: 40px 24px;
-          max-width: 900px;
-          margin: 0 auto;
-        }
         .title {
           color: #e2e8f0;
           font-size: 26px;
@@ -526,14 +310,8 @@ export default function Perfil() {
           animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
           z-index: 999;
         }
-        .toast.success {
-          background: #10b981;
-          color: #0f172a;
-        }
-        .toast.error {
-          background: #ef4444;
-          color: #fff;
-        }
+        .toast.success { background: #10b981; color: #0f172a; }
+        .toast.error { background: #ef4444; color: #fff; }
 
         /* ===== Responsive ===== */
         @media (max-width: 720px) {
@@ -543,7 +321,6 @@ export default function Perfil() {
             padding: 24px;
           }
           .info-group label { justify-content: center; }
-          .container { padding: 24px 16px; }
           .title { font-size: 22px; }
         }
       `}</style>
