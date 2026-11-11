@@ -3,11 +3,13 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from './firebase/config.js';
+import AsistenteVirtual from './components/AsistenteVirtual';
 
 // Páginas públicas
 import Login from './components/login.jsx';
 const Registro = lazy(() => import('./components/Registro.jsx'));
 const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'));
+const Ticket = lazy(() => import('./components/Ticket.jsx'));   // 🆕 Página del QR
 
 // Layout
 import Layout from './components/layout.jsx';
@@ -62,6 +64,9 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Registro />} />
           <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
+
+          {/* 🆕 RUTA PÚBLICA DEL TICKET (QR) */}
+          <Route path="/ticket" element={<Ticket />} />
 
           {/* RUTAS PRIVADAS */}
           <Route element={<Layout />}>
