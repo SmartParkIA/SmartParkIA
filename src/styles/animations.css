@@ -1,0 +1,94 @@
+/* ===== Gradientes que respiran ===== */
+@keyframes blobMove1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+@keyframes blobMove2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-40px, 30px) scale(1.15); }
+}
+@keyframes blobMove3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(50px, 30px) scale(0.95); }
+  66% { transform: translate(-30px, -40px) scale(1.05); }
+}
+
+/* ===== Shimmer dorado en las cards ===== */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ===== Pulso suave para iconos ===== */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 15px currentColor; }
+  50% { box-shadow: 0 0 30px currentColor, 0 0 45px currentColor; }
+}
+
+/* ===== Spin para loaders ===== */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== Fade in general ===== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Grid de fondo ===== */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(0, 242, 254, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 242, 254, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ===== Efecto de borde con gradiente ===== */
+.gradient-border {
+  position: relative;
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #00f2fe, #10b981, #f59e0b);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 0.3s;
+}
+.gradient-border:hover::before {
+  opacity: 1;
+}
+
+/* ===== Shimmer que barre las cards ===== */
+.card-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.card-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255,255,255,0.06) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite linear;
+  pointer-events: none;
+}

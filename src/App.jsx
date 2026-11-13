@@ -28,7 +28,7 @@ const Admin = lazy(() => import('./components/Admin.jsx'));
 
 // NUEVO: Importamos la página de Finanzas
 const Finanzas = lazy(() => import('./components/Finanzas.jsx'));
-
+const descargarArchivo=lazy(()=>import("./components/descargarArchivo.jsx"))
 // Protector de rutas
 function RutaProtegida({ children, allowedRole }) {
   const [user, setUser] = useState(null);
