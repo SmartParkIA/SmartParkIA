@@ -2,17 +2,13 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    FaBars,
-    FaCalendarAlt,
-    FaCog,
-    FaHistory, FaMapMarkedAlt,
-    FaParking,
-    FaSignOutAlt,
-    FaTimes,
-    FaUser
+    FaBars, FaCalendarAlt, FaCar, FaCheckCircle, FaClipboardList,
+    FaCog, FaHistory, FaMapMarkedAlt, FaParking, FaSignOutAlt,
+    FaTimes, FaUser, FaChartPie 
 } from "react-icons/fa";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
+import AsistenteVirtual from "./AsistenteVirtual"; // <-- Importación
 import "../styles/layout.css";
 
 export default function Layout() {
@@ -46,19 +42,22 @@ export default function Layout() {
     navigate("/login", { replace: true });
   };
 
-  if (loading) return <div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>Cargando...</div>;
+  if (loading) return <div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>Cargando menú...</div>;
 
   const isAdmin = userData?.rol === "admin";
   const isActive = (path) => location.pathname === path ? "active" : "";
 
-  // --- Título dinámico del Navbar ---
   const getPageTitle = () => {
     const path = location.pathname;
+    if (path.includes("mis-vehiculos")) return "Mis Vehículos";
     if (path.includes("perfil")) return "Mi Perfil";
     if (path.includes("reservar")) return "Reservar Espacio";
     if (path.includes("reservas")) return "Mis Reservas";
     if (path.includes("historial")) return "Historial";
     if (path.includes("estacionamientos")) return "Estacionamientos";
+    if (path.includes("disponibilidad")) return "Disponibilidad";
+    if (path.includes("finanzas")) return "Finanzas";
+    if (path.includes("registrar-estacionamiento")) return "Registrar Estacionamiento";
     if (path.includes("admin")) return "Panel de Administración";
     return "SmartPark IA";
   };
@@ -70,10 +69,9 @@ export default function Layout() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-container">
-            <span className="logo-icon">P</span>
+            <span className="logo-icon">SP</span>
             <h3>SmartPark IA</h3>
           </div>
-          {/* Botón de cerrar solo visible en móviles */}
           <button className="close-btn-mobile" onClick={() => setSidebarOpen(false)}>
             <FaTimes />
           </button>
@@ -84,8 +82,12 @@ export default function Layout() {
             <FaUser /> Mi Perfil
           </Link>
 
+          {/* --- MENÚ PARA USUARIOS NORMALES --- */}
           {!isAdmin && (
             <>
+              <Link to="/mis-vehiculos" className={isActive("/mis-vehiculos")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaCar /> Mi Vehículo
+              </Link>
               <Link to="/reservar" className={isActive("/reservar")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaCalendarAlt /> Reservar Espacio
               </Link>
@@ -98,17 +100,28 @@ export default function Layout() {
               <Link to="/estacionamientos" className={isActive("/estacionamientos")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaParking /> Estacionamientos
               </Link>
+              <Link to="/disponibilidad" className={isActive("/disponibilidad")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaCheckCircle /> Disponibilidad
+              </Link>
             </>
           )}
 
+          {/* --- MENÚ PARA ADMINISTRADORES --- */}
           {isAdmin && (
-            <Link to="/admin" className={isActive("/admin")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
-              <FaCog /> Gestión de Usuarios
-            </Link>
+            <>
+              <Link to="/admin" className={isActive("/admin")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaCog /> Gestión de Usuarios
+              </Link>
+              <Link to="/finanzas" className={isActive("/finanzas")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaChartPie /> Finanzas
+              </Link>
+              <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaClipboardList /> Registrar Estacionamiento
+              </Link>
+            </>
           )}
         </nav>
 
-        {/* --- PERFIL DEL USUARIO EN EL SIDEBAR --- */}
         <div className="sidebar-user">
           <div className="user-info">
             <div className="user-avatar">
@@ -116,7 +129,7 @@ export default function Layout() {
             </div>
             <div className="user-details">
               <span className="user-name">{userData?.nombres || "Usuario"}</span>
-              <span className="user-email">{auth.currentUser?.email || "correo@ejemplo.com"}</span>
+              <span className="user-email">{auth.currentUser?.email || ""}</span>
             </div>
           </div>
           <button className="logout-btn" onClick={handleLogout} title="Cerrar Sesión">
@@ -131,13 +144,27 @@ export default function Layout() {
       {/* ====== CONTENIDO PRINCIPAL ====== */}
       <div className="main-content">
         <header className="navbar">
-          <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            {sidebarOpen ? <FaTimes /> : <FaBars />}
-          </button>
-          
-          {/* Título Dinámico */}
-          <div className="navbar-title-container">
-            <span className="navbar-brand">{getPageTitle()}</span>
+          <div className="navbar-left">
+            <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              {sidebarOpen ? <FaTimes /> : <FaBars />}
+            </button>
+            
+            <div className="navbar-brand-container">
+               <div className="navbar-icon" style={{ fontSize: '15px', fontWeight: '900', letterSpacing: '-0.5px' }}>
+              SP
+              </div>
+              <div className="navbar-text">
+                <h1>SmartPark IA</h1>
+                <p>{getPageTitle()}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="navbar-right">
+            <span className="admin-badge">
+              <span className="pulse-dot"></span>
+              {isAdmin ? "PANEL ADMINISTRATIVO" : "PANEL DE USUARIO"}
+            </span>
           </div>
         </header>
 
@@ -145,6 +172,10 @@ export default function Layout() {
           <Outlet /> 
         </div>
       </div>
+
+      {/* ====== ASISTENTE VIRTUAL (SOLO PARA USUARIOS) ====== */}
+      {!isAdmin && <AsistenteVirtual />}
+
     </div>
   );
 }
