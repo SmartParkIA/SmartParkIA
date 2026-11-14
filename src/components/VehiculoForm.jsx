@@ -1,14 +1,33 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase/config.js";
-import { FaCar, FaHashtag, FaIdCard, FaSave, FaTag, FaCheckCircle, FaExclamationCircle, FaEdit, FaCamera } from "react-icons/fa";
+import { 
+  FaCar, FaHashtag, FaIdCard, FaSave, FaTag, 
+  FaCheckCircle, FaExclamationCircle, FaEdit, FaCamera, 
+  FaExclamationTriangle 
+} from "react-icons/fa";
 import { getVehiculos, saveVehiculo } from "../services/userService";
-import "../styles/forms.css"; // Mantenemos la importación por si hay algo más, pero usaremos estilos propios
+import "../styles/forms.css";
+
+// 🔥 Lista de marcas válidas
+const MARCAS_VALIDAS = [
+  "Nissan", "Chevrolet", "Volkswagen", "Toyota", "Ford", "Honda", 
+  "Kia", "Mazda", "Hyundai", "SEAT", "Renault", "Peugeot", 
+  "BMW", "Mercedes-Benz", "Audi", "Jeep", "Suzuki", "Mitsubishi", 
+  "Fiat", "Volvo", "Subaru", "Tesla", "RAM", "GMC", "Cadillac", "Porsche"
+];
+
+// 🚫 Lista negra para evitar bromitas en el campo de Modelo
+const PALABRAS_PROHIBIDAS = [
+  "perro", "gato", "animal", "caca", "raton", "pajaro", "vaca", 
+  "caballo", "tonto", "idiota", "test", "prueba", "asdf", "qwerty",
+  "pene", "puta", "puto", "mierda", "joto", "culero", "verga", "pito"
+];
 
 const CAMPOS = [
-  { icon: <FaIdCard />, label: "Placa",  name: "placa",  placeholder: "ABC-123" },
-  { icon: <FaTag />,    label: "Marca",  name: "marca",  placeholder: "Toyota" },
-  { icon: <FaHashtag />,label: "Modelo", name: "modelo", placeholder: "Corolla 2020" },
+  { icon: <FaIdCard />, label: "Placa",  name: "placa",  placeholder: "ABC-1234" },
+  { icon: <FaTag />,    label: "Marca",  name: "marca",  placeholder: "Ej. Toyota", list: "listaMarcas" },
+  { icon: <FaHashtag />,label: "Modelo", name: "modelo", placeholder: "Ej. Corolla 2020" },
 ];
 
 export default function VehiculoForm() {
@@ -19,6 +38,8 @@ export default function VehiculoForm() {
   const [editandoId, setEditandoId] = useState(null); 
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+
+  const [errors, setErrors] = useState({});
 
   const MAX_VEHICULOS = 3;
 
@@ -48,12 +69,85 @@ export default function VehiculoForm() {
     cargarVehiculos();
   }, [uid]);
 
-  const handleChange = (e) =>
-    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  // =====================================================================
+  // 🔒 VALIDACIÓN ESTRICTA Y BLINDADA
+  // =====================================================================
+  const validateField = (name, value) => {
+    let error = "";
+    const trimmed = value.trim();
+    const valorMin = trimmed.toLowerCase();
+    
+    if (name === "marca") {
+      if (!trimmed) {
+        error = "La marca es obligatoria.";
+      } else if (!MARCAS_VALIDAS.some(m => m.toLowerCase() === valorMin)) {
+        error = "Ingresa una marca válida (Ej. Toyota, Nissan).";
+      }
+    }
+
+    if (name === "modelo") {
+      if (!trimmed) {
+        error = "El modelo es obligatorio.";
+      } else if (trimmed.length < 3) {
+        error = "El modelo debe tener al menos 3 caracteres.";
+      } else if (trimmed.length > 20) {
+        error = "El modelo es demasiado largo (máx. 20 letras).";
+      } else if (!/^[a-zA-Z0-9\s\-]+$/.test(trimmed)) {
+        error = "Solo se permiten letras, números y guiones.";
+      } else if (/^\d+$/.test(trimmed)) {
+        // 🚫 Regla 1: No puede ser SOLO números (Ej. "111111")
+        error = "El modelo debe incluir al menos una letra (Ej. 208, Corolla).";
+      } else if (/(.)\1{3,}/.test(trimmed)) {
+        // 🚫 Regla 2: No puede repetir el mismo carácter 4 veces seguidas (Ej. "1111" o "aaaa")
+        error = "Ingresa un modelo válido (no repitas el mismo carácter).";
+      } else if (PALABRAS_PROHIBIDAS.some(p => valorMin.includes(p))) {
+        // 🚫 Regla 3: Lista negra
+        error = "Ingresa un modelo de vehículo válido, no una broma.";
+      }
+    }
+
+    if (name === "placa") {
+      if (!trimmed) {
+        error = "La placa es obligatoria.";
+      } else {
+        // Formato: 2 a 4 letras, guion opcional, 3 a 4 números.
+        const placaRegex = /^[A-Z]{2,4}-?\d{3,4}$/;
+        if (!placaRegex.test(value)) {
+          error = "Formato inválido (Ej. AAE-112).";
+        }
+      }
+    }
+
+    return error;
+  };
+
+  // =====================================================================
+  // ✍️ MANEJO DE CAMBIOS
+  // =====================================================================
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    let newValue = value;
+    
+    // Auto-corrección en placas
+    if (name === "placa") {
+      newValue = value.toUpperCase().replace(/O/g, "0").replace(/I/g, "1");
+    }
+    
+    setForm((f) => ({ ...f, [name]: newValue }));
+
+    const error = validateField(name, newValue);
+    setErrors((prev) => ({ ...prev, [name]: error }));
+  };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("El archivo debe ser una imagen.", "error");
+      return;
+    }
 
     if (file.size > 500 * 1024) {
       showToast("La imagen es muy grande (máx. 500 KB).", "error");
@@ -61,9 +155,7 @@ export default function VehiculoForm() {
     }
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagenBase64(reader.result);
-    };
+    reader.onloadend = () => setImagenBase64(reader.result);
     reader.readAsDataURL(file);
   };
 
@@ -75,14 +167,19 @@ export default function VehiculoForm() {
     });
     setImagenBase64(vehiculo.imagen || ""); 
     setEditandoId(vehiculo.id);
+    setErrors({});
   };
 
   const limpiarFormulario = () => {
     setForm({ placa: "", marca: "", modelo: "" });
     setImagenBase64(""); 
     setEditandoId(null);
+    setErrors({});
   };
 
+  // =====================================================================
+  // 🚀 ENVÍO
+  // =====================================================================
   const guardar = async (e) => {
     e.preventDefault();
 
@@ -96,17 +193,24 @@ export default function VehiculoForm() {
       return;
     }
 
+    let newErrors = {};
+    ["placa", "marca", "modelo"].forEach((field) => {
+      const err = validateField(field, form[field]);
+      if (err) newErrors[field] = err;
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      showToast("Revisa los campos marcados en rojo.", "error");
+      return;
+    }
+
     const limpio = {
       placa: form.placa.trim().toUpperCase(),
       marca: form.marca.trim(),
       modelo: form.modelo.trim(),
       imagen: imagenBase64 
     };
-
-    if (!limpio.placa || !limpio.marca || !limpio.modelo) {
-      showToast("Completa todos los campos", "error");
-      return;
-    }
 
     setLoading(true);
     try {
@@ -132,13 +236,11 @@ export default function VehiculoForm() {
 
   return (
     <div className="vehiculos-page">
-      {/* FONDO ESTILO FINANZAS */}
       <div className="bg-grid"></div>
       <div className="bg-glow"></div>
 
       <div className="vehiculos-content">
         
-        {/* HEADER */}
         <div className="page-header">
           <div className="header-icon-box">
             <FaCar />
@@ -151,7 +253,7 @@ export default function VehiculoForm() {
 
         <div className="vehiculos-layout">
           
-          {/* COLUMNA IZQUIERDA: LISTA DE TARJETAS */}
+          {/* COLUMNA IZQUIERDA */}
           <div className="lista-container">
             <h3 className="section-title">
               Registrados <span className="count-badge">{vehiculos.length}/{MAX_VEHICULOS}</span>
@@ -190,7 +292,7 @@ export default function VehiculoForm() {
           </div>
 
           {/* COLUMNA DERECHA: FORMULARIO */}
-          <form onSubmit={guardar} className="form-card">
+          <form onSubmit={guardar} className="form-card" noValidate>
             <div className="form-header">
               <div className="form-icon-box">
                 <FaCar size={22} />
@@ -201,7 +303,6 @@ export default function VehiculoForm() {
               </div>
             </div>
 
-            {/* Subida de Imagen */}
             <div className="image-upload-group">
               <div className={`image-upload-wrapper ${limiteAlcanzado ? 'disabled' : ''}`}>
                 {imagenBase64 ? (
@@ -222,7 +323,6 @@ export default function VehiculoForm() {
               </div>
             </div>
 
-            {/* Inputs del Formulario */}
             <div className="form-fields">
               {CAMPOS.map((c) => (
                 <div className="form-group" key={c.name}>
@@ -232,14 +332,29 @@ export default function VehiculoForm() {
                     value={form[c.name]}
                     onChange={handleChange}
                     placeholder={c.placeholder}
-                    className="form-input"
+                    className={`form-input ${errors[c.name] ? "input-error" : ""}`}
                     disabled={limiteAlcanzado}
+                    maxLength={c.name === "placa" ? 10 : 25}
+                    list={c.list}
+                    autoComplete="off"
                   />
+                  {c.name === "marca" && (
+                    <datalist id="listaMarcas">
+                      {MARCAS_VALIDAS.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  )}
+                  
+                  {errors[c.name] && (
+                    <span className="error-text">
+                      <FaExclamationTriangle /> {errors[c.name]}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
 
-            {/* Botones */}
             <div className="form-actions">
               {editandoId && (
                 <button type="button" onClick={limpiarFormulario} className="btn-secondary">
@@ -261,7 +376,6 @@ export default function VehiculoForm() {
         </div>
       </div>
 
-      {/* TOAST */}
       {toast && (
         <div className={`toast-alert ${toast.type}`}>
           {toast.type === "success" ? <FaCheckCircle size={20} /> : <FaExclamationCircle size={20} />}
@@ -269,11 +383,11 @@ export default function VehiculoForm() {
         </div>
       )}
 
-      {/* ESTILOS */}
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes errorSlide { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 
         .vehiculos-page {
           position: relative;
@@ -286,7 +400,6 @@ export default function VehiculoForm() {
           box-sizing: border-box;
         }
 
-        /* Fondo */
         .bg-grid {
           position: absolute; inset: 0;
           background-image: 
@@ -306,7 +419,6 @@ export default function VehiculoForm() {
           animation: fadeIn 0.5s ease;
         }
 
-        /* Header */
         .page-header {
           display: flex; align-items: center; gap: 16px; margin-bottom: 35px;
         }
@@ -320,7 +432,6 @@ export default function VehiculoForm() {
         .page-header h2 { color: #fff; font-size: 28px; margin: 0; font-weight: 800; }
         .subtitle { color: #94a3b8; margin: 4px 0 0; font-size: 14px; }
 
-        /* Layout de 2 columnas */
         .vehiculos-layout {
           display: grid;
           grid-template-columns: 1fr 1.2fr;
@@ -328,7 +439,6 @@ export default function VehiculoForm() {
           align-items: start;
         }
 
-        /* Columna Izquierda: Tarjetas */
         .section-title {
           color: #fff; font-size: 18px; margin: 0 0 20px;
           display: flex; align-items: center; gap: 10px;
@@ -388,7 +498,6 @@ export default function VehiculoForm() {
         }
         .btn-edit:hover { background: #00f2fe; color: #050b14; box-shadow: 0 0 15px rgba(0, 242, 254, 0.4); }
 
-        /* Columna Derecha: Formulario */
         .form-card {
           background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(24px);
           border: 1px solid rgba(0, 242, 254, 0.15);
@@ -410,7 +519,6 @@ export default function VehiculoForm() {
         .form-header h2 { margin: 0; color: #fff; font-size: 20px; font-weight: 700; }
         .form-header p { margin: 2px 0 0; color: #94a3b8; font-size: 13px; }
 
-        /* Subir Imagen */
         .image-upload-group { margin-bottom: 25px; }
         .image-upload-wrapper {
           position: relative; width: 100%; height: 140px;
@@ -429,7 +537,6 @@ export default function VehiculoForm() {
         .image-preview { width: 100%; height: 100%; object-fit: cover; }
         .image-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-        /* Inputs */
         .form-fields { display: flex; flex-direction: column; gap: 18px; margin-bottom: 30px; }
         .form-group { display: flex; flex-direction: column; gap: 8px; }
         .form-label {
@@ -445,7 +552,22 @@ export default function VehiculoForm() {
         .form-input:disabled { opacity: 0.5; cursor: not-allowed; }
         .form-input::placeholder { color: rgba(148, 163, 184, 0.4); }
 
-        /* Botones */
+        .form-input.input-error {
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 12px rgba(239, 68, 68, 0.3) !important;
+          background: rgba(239, 68, 68, 0.05);
+        }
+        .form-input.input-error:focus {
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2), 0 0 12px rgba(239, 68, 68, 0.4) !important;
+        }
+        .error-text {
+          display: flex; align-items: center; gap: 6px;
+          color: #ef4444; font-size: 12px; font-weight: 600;
+          margin-top: 4px;
+          animation: errorSlide 0.3s ease-out;
+        }
+        .error-text svg { font-size: 14px; }
+
         .form-actions { display: flex; gap: 12px; }
         .btn-primary, .btn-secondary {
           display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -467,7 +589,6 @@ export default function VehiculoForm() {
         }
         .btn-secondary:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 
-        /* Toast */
         .toast-alert {
           position: fixed; bottom: 24px; right: 24px;
           display: flex; align-items: center; gap: 10px; padding: 14px 24px;
@@ -480,7 +601,6 @@ export default function VehiculoForm() {
 
         .loading-text { text-align: center; color: #00f2fe; padding: 40px; position: relative; z-index: 1; }
 
-        /* Responsive */
         @media (max-width: 850px) {
           .vehiculos-layout { grid-template-columns: 1fr; }
         }

@@ -6,7 +6,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/config.js";
-import { FaEye, FaEyeSlash, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
+import { FaEye, FaEyeSlash, FaCheckCircle, FaTimesCircle, FaExclamationCircle } from "react-icons/fa";
 
 export default function Registro() {
   const navigate = useNavigate();
@@ -20,16 +20,68 @@ export default function Registro() {
     password: "",
   });
 
+  const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [mensaje, setMensaje] = useState("");
-  const [tipo, setTipo] = useState(null); // "info" | "ok" | "error"
+  const [tipo, setTipo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [exito, setExito] = useState(false);
 
-  const handleChange = (e) =>
-    setForm((f) => ({ ...f, [e.target.id]: e.target.value }));
+  // --- FUNCIÓN PARA CALCULAR LA EDAD ---
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return 0;
+    const hoy = new Date();
+    const cumpleanos = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - cumpleanos.getFullYear();
+    const mes = hoy.getMonth() - cumpleanos.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < cumpleanos.getDate())) {
+      edad--;
+    }
+    return edad;
+  };
 
-  // Fuerza de contraseña simple
+  // --- VALIDACIÓN DE CAMPOS INDIVIDUALES ---
+  const validateField = (name, value) => {
+    let error = "";
+    switch (name) {
+      case "nombres":
+      case "apellidoPaterno":
+      case "apellidoMaterno":
+        if (!value.trim()) error = "Este campo es obligatorio.";
+        else if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(value)) error = "Solo se permiten letras y espacios.";
+        break;
+      case "fechaNacimiento":
+        if (!value) error = "La fecha es obligatoria.";
+        else if (calcularEdad(value) < 18) error = "Debes ser mayor de 18 años.";
+        break;
+      case "email":
+        if (!value) error = "El correo es obligatorio.";
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = "Ingresa un correo válido.";
+        break;
+      case "password":
+        if (!value) error = "La contraseña es obligatoria.";
+        else if (value.length < 8) error = "Mínimo 8 caracteres.";
+        else if (!/[A-Z]/.test(value)) error = "Debe contener al menos una mayúscula.";
+        else if (!/[a-z]/.test(value)) error = "Debe contener al menos una minúscula.";
+        else if (!/\d/.test(value)) error = "Debe contener al menos un número.";
+        else if (!/[^A-Za-z0-9]/.test(value)) error = "Debe contener un carácter especial (!@#$...).";
+        break;
+      default:
+        break;
+    }
+    return error;
+  };
+
+  const handleChange = (e) => {
+    const { id, value } = e.target;
+    setForm((f) => ({ ...f, [id]: value }));
+    
+    // Validar en tiempo real mientras escribe
+    const error = validateField(id, value);
+    setErrors((prev) => ({ ...prev, [id]: error }));
+  };
+
+  // Fuerza de contraseña simple (visual)
   const strength = (() => {
     const p = form.password;
     let s = 0;
@@ -38,34 +90,27 @@ export default function Registro() {
     if (/[A-Z]/.test(p)) s++;
     if (/\d/.test(p)) s++;
     if (/[^A-Za-z0-9]/.test(p)) s++;
-    return s; // 0..5
+    return s; 
   })();
 
   const strengthLabel = ["Muy débil", "Débil", "Aceptable", "Buena", "Fuerte", "Excelente"][strength];
   const strengthColor = ["#ef4444", "#ef4444", "#f59e0b", "#f59e0b", "#10b981", "#10b981"][strength];
 
-  // --- NUEVA FUNCIÓN PARA CALCULAR LA EDAD ---
-  const calcularEdad = (fechaNacimiento) => {
-    const hoy = new Date();
-    const cumpleanos = new Date(fechaNacimiento);
-    let edad = hoy.getFullYear() - cumpleanos.getFullYear();
-    const mes = hoy.getMonth() - cumpleanos.getMonth();
-    // Si el mes actual es menor al de nacimiento, o es el mismo mes pero aún no ha pasado el día del cumpleaños, restamos 1 año
-    if (mes < 0 || (mes === 0 && hoy.getDate() < cumpleanos.getDate())) {
-      edad--;
-    }
-    return edad;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // --- VALIDACIÓN DE EDAD ---
-    const edad = calcularEdad(form.fechaNacimiento);
-    if (edad < 18) {
+    // 1. Validar todos los campos antes de enviar
+    const newErrors = {};
+    Object.keys(form).forEach((key) => {
+      const error = validateField(key, form[key]);
+      if (error) newErrors[key] = error;
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       setTipo("error");
-      setMensaje("Debes ser mayor de 18 años para registrarte en SmartPark IA.");
-      return; // Detenemos la ejecución aquí
+      setMensaje("Por favor, corrige los errores en el formulario.");
+      return;
     }
 
     setLoading(true);
@@ -84,10 +129,10 @@ export default function Registro() {
 
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
-        nombres: form.nombres,
-        apellidoPaterno: form.apellidoPaterno,
-        apellidoMaterno: form.apellidoMaterno,
-        correo: form.email,
+        nombres: form.nombres.trim(),
+        apellidoPaterno: form.apellidoPaterno.trim(),
+        apellidoMaterno: form.apellidoMaterno.trim(),
+        correo: form.email.toLowerCase().trim(),
         fechaNacimiento: form.fechaNacimiento,
         estado: true,
         rol: "usuario",
@@ -95,9 +140,7 @@ export default function Registro() {
       });
 
       setTipo("ok");
-      setMensaje(
-        "¡Registro exitoso! Te enviamos un correo para verificar tu cuenta."
-      );
+      setMensaje("¡Registro exitoso! Te enviamos un correo para verificar tu cuenta.");
       setExito(true);
 
       setTimeout(() => navigate("/login"), 2500);
@@ -105,9 +148,10 @@ export default function Registro() {
       console.error("Error:", error.code, error.message);
       setTipo("error");
       if (error.code === "auth/email-already-in-use") {
+        setErrors((prev) => ({ ...prev, email: "Este correo ya está registrado." }));
         setMensaje("Este correo electrónico ya está registrado.");
       } else if (error.code === "auth/weak-password") {
-        setMensaje("La contraseña es demasiado débil (mínimo 6 caracteres).");
+        setMensaje("La contraseña es demasiado débil.");
       } else {
         setMensaje("Error: " + error.message);
       }
@@ -116,7 +160,6 @@ export default function Registro() {
     }
   };
 
-  // Calculamos la fecha máxima permitida (hoy menos 18 años)
   const hoy = new Date();
   hoy.setFullYear(hoy.getFullYear() - 18);
   const fechaMaxima = hoy.toISOString().split("T")[0];
@@ -135,15 +178,16 @@ export default function Registro() {
             <p className="redirect">Redirigiendo al login...</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <label htmlFor="nombres">Nombres</label>
             <input
               id="nombres"
               type="text"
               value={form.nombres}
               onChange={handleChange}
-              required
+              className={errors.nombres ? "input-error" : ""}
             />
+            {errors.nombres && <span className="error-text"><FaExclamationCircle /> {errors.nombres}</span>}
 
             <div className="row">
               <div className="col">
@@ -153,8 +197,9 @@ export default function Registro() {
                   type="text"
                   value={form.apellidoPaterno}
                   onChange={handleChange}
-                  required
+                  className={errors.apellidoPaterno ? "input-error" : ""}
                 />
+                {errors.apellidoPaterno && <span className="error-text"><FaExclamationCircle /> {errors.apellidoPaterno}</span>}
               </div>
               <div className="col">
                 <label htmlFor="apellidoMaterno">Apellido Materno</label>
@@ -163,8 +208,9 @@ export default function Registro() {
                   type="text"
                   value={form.apellidoMaterno}
                   onChange={handleChange}
-                  required
+                  className={errors.apellidoMaterno ? "input-error" : ""}
                 />
+                {errors.apellidoMaterno && <span className="error-text"><FaExclamationCircle /> {errors.apellidoMaterno}</span>}
               </div>
             </div>
 
@@ -174,9 +220,10 @@ export default function Registro() {
               type="date"
               value={form.fechaNacimiento}
               onChange={handleChange}
-              max={fechaMaxima} // <-- RESTRICCIÓN EN EL CALENDARIO
-              required
+              max={fechaMaxima}
+              className={errors.fechaNacimiento ? "input-error" : ""}
             />
+            {errors.fechaNacimiento && <span className="error-text"><FaExclamationCircle /> {errors.fechaNacimiento}</span>}
 
             <label htmlFor="email">Correo electrónico</label>
             <input
@@ -184,8 +231,9 @@ export default function Registro() {
               type="email"
               value={form.email}
               onChange={handleChange}
-              required
+              className={errors.email ? "input-error" : ""}
             />
+            {errors.email && <span className="error-text"><FaExclamationCircle /> {errors.email}</span>}
 
             <label htmlFor="password">Contraseña</label>
             <div className="password-container">
@@ -194,7 +242,7 @@ export default function Registro() {
                 type={showPassword ? "text" : "password"}
                 value={form.password}
                 onChange={handleChange}
-                required
+                className={errors.password ? "input-error" : ""}
               />
               <button
                 type="button"
@@ -209,7 +257,7 @@ export default function Registro() {
                 )}
               </button>
             </div>
-
+            
             {/* Barra de fuerza */}
             {form.password && (
               <div className="strength">
@@ -225,6 +273,7 @@ export default function Registro() {
                 <span style={{ color: strengthColor }}>{strengthLabel}</span>
               </div>
             )}
+            {errors.password && <span className="error-text"><FaExclamationCircle /> {errors.password}</span>}
 
             <button type="submit" disabled={loading} className="submit-btn">
               {loading ? <span className="spinner" /> : "Registrarse"}
@@ -262,6 +311,7 @@ export default function Registro() {
             --neon-cyan: #00f2fe;
             --neon-blue: #0072ff;
             --neon-glow: rgba(0, 242, 254, 0.35);
+            --error-red: #ef4444;
         }
 
         .reg-page {
@@ -336,15 +386,6 @@ export default function Registro() {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
-        .reg-card:hover {
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(0, 242, 254, 0.5);
-        }
-
-        .reg-card.is-success {
-            animation: pop 0.5s ease;
-            border-color: rgba(16, 185, 129, 0.4);
-        }
-
         .reg-card h2 {
             text-align: center;
             color: #ffffff;
@@ -394,20 +435,33 @@ export default function Registro() {
             outline: none;
         }
 
-        .reg-card input::placeholder {
-            color: rgba(148, 163, 184, 0.5);
-        }
-
-        .reg-card input:hover {
-            border-color: rgba(0, 242, 254, 0.3);
-            background: rgba(3, 7, 18, 0.8);
-        }
-
         .reg-card input:focus {
             border-color: var(--neon-cyan);
             box-shadow: 0 0 16px var(--neon-glow), inset 0 0 8px rgba(0, 242, 254, 0.1);
             background: rgba(3, 7, 18, 0.95);
             transform: translateY(-1px);
+        }
+
+        /* --- ESTILOS DE VALIDACIÓN --- */
+        .reg-card input.input-error {
+            border-color: var(--error-red);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+        }
+        
+        .reg-card input.input-error:focus {
+            border-color: var(--error-red);
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+        }
+
+        .error-text {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--error-red);
+            font-size: 12px;
+            margin-top: 6px;
+            font-weight: 500;
+            animation: fadeIn 0.3s ease;
         }
 
         .row { display: flex; gap: 12px; }
@@ -435,10 +489,6 @@ export default function Registro() {
             align-items: center;
             border-radius: 6px;
             transition: background 0.2s ease;
-        }
-
-        .toggle-password:hover {
-            background: rgba(0, 242, 254, 0.1);
         }
 
         .strength {
@@ -485,36 +535,15 @@ export default function Registro() {
             min-height: 48px;
         }
 
-        .submit-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-            transition: left 0.5s ease;
-        }
-
-        .submit-btn:hover::before {
-            left: 100%;
-        }
-
         .submit-btn:hover:not(:disabled) {
             transform: translateY(-2px) scale(1.01);
             box-shadow: 0 8px 25px rgba(0, 242, 254, 0.6);
             filter: brightness(1.1);
         }
 
-        .submit-btn:active:not(:disabled) {
-            transform: translateY(0) scale(0.99);
-        }
-
         .submit-btn:disabled {
             opacity: 0.7;
             cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
         }
 
         .spinner {
@@ -539,7 +568,7 @@ export default function Registro() {
         }
         .msg.info  { color: var(--neon-cyan); }
         .msg.ok    { color: #10b981; }
-        .msg.error { color: #ef4444; animation: shake 0.4s ease; }
+        .msg.error { color: var(--error-red); animation: shake 0.4s ease; }
 
         .success-box {
             text-align: center;
@@ -570,46 +599,19 @@ export default function Registro() {
             font-weight: 700;
             transition: all 0.2s ease;
         }
-        .reg-card .link a:hover {
-            text-decoration: underline;
-            text-shadow: 0 0 10px var(--neon-cyan);
-        }
 
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-        @keyframes pop {
-            0%   { transform: scale(0); }
-            60%  { transform: scale(1.15); }
-            100% { transform: scale(1); }
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
-            25%      { transform: translateX(-6px); }
-            75%      { transform: translateX(6px); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
         }
 
         @media (max-width: 480px) {
-            .reg-card {
-                padding: 30px 20px;
-                border-radius: 20px;
-                max-width: 95%;
-            }
-            .reg-card h2 {
-                font-size: 22px;
-            }
-            .row {
-                flex-direction: column;
-                gap: 0;
-            }
+            .reg-card { padding: 30px 20px; max-width: 95%; }
+            .row { flex-direction: column; gap: 0; }
         }
       `}</style>
     </div>
