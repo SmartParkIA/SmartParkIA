@@ -1,51 +1,50 @@
-<<<<<<< HEAD
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-=======
-# Dependencias de Node.js
-node_modules/
-**/node_modules/
-
-# Variables de entorno
-.env
-.env.*
-!.env.example
-
-# Credenciales privadas de Firebase
-**/serviceAccountKey*.json
-**/*serviceAccount*.json
-
-# Archivos generados
-dist/
-build/
-coverage/
-
-# Archivos temporales
-*.log
-
-# Archivos del sistema
-.DS_Store
+# Logs 
+logs 
+*.log 
+npm-debug.log* 
+yarn-debug.log* 
+yarn-error.log* 
+pnpm-debug.log* 
+lerna-debug.log* 
+ 
+# Dependencias 
+node_modules 
+node_modules/ 
+**/node_modules/ 
+ 
+# Builds 
+dist 
+dist/ 
+dist-ssr 
+build/ 
+coverage/ 
+*.local 
+ 
+# Variables de entorno 
+.env 
+.env.* 
+!.env.example 
+ 
+# Credenciales privadas de Firebase 
+**/serviceAccountKey*.json 
+**/*serviceAccount*.json 
+ 
+# Archivos comprimidos / backups 
+*.zip 
+*.rar 
+*.7z 
+*.tar.gz 
+ 
+# Editor directories and files 
+.vscode/* 
+!.vscode/extensions.json 
+.idea 
+.DS_Store 
+*.suo 
+*.ntvs* 
+*.njsproj 
+*.sln 
+*.sw? 
+ 
+# Sistema 
 Thumbs.db
->>>>>>> 95c8cfe1f26e12dee06f5d8ed1be93476be474d9
