@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -71,7 +70,6 @@ clienteMQTT.on("message", async (topic, payload) => {
   try {
     const datos = JSON.parse(payload.toString());
 
-    // Obtener el identificador del cajón desde el tópico
     const coincidencia = topic.match(
       /^smartpark\/cajones\/([^/]+)\/estado$/
     );
@@ -83,7 +81,6 @@ clienteMQTT.on("message", async (topic, payload) => {
 
     const cajonId = coincidencia[1];
 
-    // Validar que el JSON corresponda con el tópico
     if (datos.cajonId !== cajonId) {
       console.warn("El cajonId no coincide con el tópico.");
       return;
@@ -108,14 +105,13 @@ clienteMQTT.on("message", async (topic, payload) => {
       ultimaActualizacion: FieldValue.serverTimestamp()
     };
 
-    // Actualizar el documento existente sin borrar otros campos
     await db
       .collection("lugares")
       .doc(cajonId)
       .set(actualizacion, { merge: true });
 
     console.log(
-      `Firestore actualizado: ${cajonId} - ${estado} - ${datos.distancia} cm`
+      `Firestore actualizado: ${cajonId} - ${estado} (${datos.distancia} cm)`
     );
 
   } catch (error) {
@@ -134,7 +130,6 @@ app.get("/", (req, res) => {
   });
 });
 
-// Estado de la conexión MQTT
 app.get("/api/mqtt/estado", (req, res) => {
   res.json({
     conectado: mqttConectado,
@@ -255,6 +250,108 @@ app.post("/api/estacionamientos", async (req, res) => {
 });
 
 // ==========================================
+// 4.1. MODIFICAR ESTACIONAMIENTO (HU-31)
+// ==========================================
+
+app.put("/api/estacionamientos/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      nombre,
+      direccion,
+      ciudad,
+      capacidad,
+      hora_apertura,
+      hora_cierre,
+      telefono,
+      responsable
+    } = req.body;
+
+    if (
+      typeof nombre !== "string" ||
+      typeof direccion !== "string" ||
+      typeof ciudad !== "string" ||
+      typeof telefono !== "string" ||
+      !nombre.trim() ||
+      !direccion.trim() ||
+      !ciudad.trim() ||
+      !telefono.trim() ||
+      capacidad === undefined ||
+      capacidad === null ||
+      String(capacidad).trim() === "" ||
+      !hora_apertura ||
+      !hora_cierre
+    ) {
+      return res.status(400).json({
+        mensaje: "Todos los campos son obligatorios."
+      });
+    }
+
+    const capacidadNumero = Number(capacidad);
+
+    if (
+      !Number.isSafeInteger(capacidadNumero) ||
+      capacidadNumero <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: "La capacidad debe ser un entero mayor que cero."
+      });
+    }
+
+    const horaValida = (hora) =>
+      typeof hora === "string" &&
+      /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
+
+    if (
+      !horaValida(hora_apertura) ||
+      !horaValida(hora_cierre)
+    ) {
+      return res.status(400).json({
+        mensaje: "Las horas deben tener el formato HH:MM."
+      });
+    }
+
+    const docRef = db.collection("estacionamientos").doc(id);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({
+        mensaje: "El estacionamiento no existe."
+      });
+    }
+
+    const datosActualizados = {
+      nombre: nombre.trim(),
+      direccion: direccion.trim(),
+      ciudad: ciudad.trim(),
+      capacidad: capacidadNumero,
+      hora_apertura,
+      hora_cierre,
+      telefono: telefono.trim(),
+      responsable: responsable || "Administrador",
+      ultima_modificacion: FieldValue.serverTimestamp()
+    };
+
+    await docRef.set(datosActualizados, { merge: true });
+
+    return res.json({
+      mensaje: "Estacionamiento modificado correctamente.",
+      estacionamiento: {
+        id,
+        ...datosActualizados
+      }
+    });
+
+  } catch (error) {
+    console.error("Error al modificar estacionamiento:", error);
+
+    return res.status(500).json({
+      mensaje: "No fue posible modificar el estacionamiento."
+    });
+  }
+});
+
+// ==========================================
 // 5. CONSULTAR ESTACIONAMIENTOS
 // ==========================================
 
@@ -290,12 +387,9 @@ const servidor = app.listen(PORT, () => {
   console.log("Firebase Firestore preparado.");
 });
 
-// Cierre ordenado
 function cerrarServidor() {
   console.log("Cerrando conexiones...");
-
   clienteMQTT.end(true);
-
   servidor.close(() => {
     process.exit(0);
   });

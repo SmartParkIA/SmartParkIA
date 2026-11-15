@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MapPin,
   Building2,
@@ -8,8 +8,10 @@ import {
   CheckCircle2,
   AlertCircle,
   RotateCcw,
-  Save
+  Save,
+  Edit3
 } from "lucide-react";
+import { auth } from "../firebase/config.js";
 import "../styles/RegistrarEstacionamiento.css";
 
 const formularioInicial = {
@@ -23,22 +25,64 @@ const formularioInicial = {
 };
 
 function RegistrarEstacionamiento() {
+  const [modo, setModo] = useState("registrar"); // "registrar" o "modificar"
+  const [listaEstacionamientos, setListaEstacionamientos] = useState([]);
+  const [idSeleccionado, setIdSeleccionado] = useState("");
+  
   const [formulario, setFormulario] = useState(formularioInicial);
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
 
+  useEffect(() => {
+    cargarEstacionamientos();
+  }, []);
+
+  async function cargarEstacionamientos() {
+    try {
+      const respuesta = await fetch("http://localhost:3001/api/estacionamientos");
+      if (respuesta.ok) {
+        const datos = await respuesta.json();
+        setListaEstacionamientos(datos);
+      }
+    } catch (error) {
+      console.error("No se pudo cargar la lista de estacionamientos:", error);
+    }
+  }
+
   function manejarCambio(evento) {
     const { name, value } = evento.target;
-
     setFormulario((anterior) => ({
       ...anterior,
       [name]: value
     }));
-
     setMensaje(null);
   }
 
-  async function registrarEstacionamiento(evento) {
+  function seleccionarSedeAModificar(e) {
+    const id = e.target.value;
+    setIdSeleccionado(id);
+    setMensaje(null);
+
+    if (!id) {
+      setFormulario(formularioInicial);
+      return;
+    }
+
+    const sedeEncontrada = listaEstacionamientos.find((s) => s.id === id);
+    if (sedeEncontrada) {
+      setFormulario({
+        nombre: sedeEncontrada.nombre || "",
+        direccion: sedeEncontrada.direccion || "",
+        ciudad: sedeEncontrada.ciudad || "",
+        capacidad: sedeEncontrada.capacidad || "",
+        hora_apertura: sedeEncontrada.hora_apertura || "06:00",
+        hora_cierre: sedeEncontrada.hora_cierre || "22:00",
+        telefono: sedeEncontrada.telefono || ""
+      });
+    }
+  }
+
+  async function enviarFormulario(evento) {
     evento.preventDefault();
     setMensaje(null);
 
@@ -72,34 +116,49 @@ function RegistrarEstacionamiento() {
     setCargando(true);
 
     try {
-      const respuesta = await fetch(
-        "http://localhost:3001/api/estacionamientos",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            ...formulario,
-            capacidad: Number(formulario.capacidad)
-          })
+      const responsableActual = auth.currentUser?.email || "Administrador";
+
+      let url = "http://localhost:3001/api/estacionamientos";
+      let method = "POST";
+
+      if (modo === "modificar") {
+        if (!idSeleccionado) {
+          setMensaje({ tipo: "error", texto: "Selecciona una sede para modificar." });
+          setCargando(false);
+          return;
         }
-      );
+        url = `http://localhost:3001/api/estacionamientos/${idSeleccionado}`;
+        method = "PUT";
+      }
+
+      const respuesta = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ...formulario,
+          capacidad: Number(formulario.capacidad),
+          responsable: responsableActual
+        })
+      });
 
       const resultado = await respuesta.json();
 
       if (!respuesta.ok) {
-        throw new Error(
-          resultado.mensaje || "No fue posible registrar la sede."
-        );
+        throw new Error(resultado.mensaje || "No fue posible completar la operación.");
       }
 
       setMensaje({
         tipo: "exito",
-        texto: `${resultado.mensaje} Folio: ${resultado.estacionamiento.id}`
+        texto: resultado.mensaje
       });
 
-      setFormulario(formularioInicial);
+      if (modo === "registrar") {
+        setFormulario(formularioInicial);
+      }
+      
+      cargarEstacionamientos();
     } catch (error) {
       setMensaje({
         tipo: "error",
@@ -115,49 +174,98 @@ function RegistrarEstacionamiento() {
 
   function limpiarFormulario() {
     setFormulario(formularioInicial);
+    setIdSeleccionado("");
     setMensaje(null);
   }
 
   return (
     <div className="pagina">
       <main className="contenido">
-        {/* Migas de pan (Breadcrumbs) */}
         <div className="ruta">
           <span>Administración</span>
           <span>/</span>
-          <strong>Registrar estacionamiento</strong>
+          <strong>{modo === "registrar" ? "Registrar estacionamiento" : "Modificar estacionamiento"}</strong>
         </div>
 
-        {/* Introducción */}
         <section className="introduccion">
           <div className="introduccion-icono">
-            <Building2 size={27} />
+            {modo === "registrar" ? <Building2 size={27} /> : <Edit3 size={27} />}
           </div>
           <div>
-            <h2>Registrar nueva sede</h2>
+            <h2>{modo === "registrar" ? "Registrar nueva sede" : "Modificar sede existente"}</h2>
             <p>
-              Ingresa la información general para dar de alta
-              una nueva sede de estacionamiento.
+              {modo === "registrar"
+                ? "Ingresa la información general para dar de alta una nueva sede."
+                : "Selecciona una sede y actualiza su información en tiempo real."}
             </p>
           </div>
         </section>
 
-        {/* Formulario */}
-        <form
-          className="formulario"
-          onSubmit={registrarEstacionamiento}
-        >
+        {/* Pestañas de control para Registrar / Modificar (HU-31) */}
+        <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+          <button
+            type="button"
+            onClick={() => { setModo("registrar"); limpiarFormulario(); }}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "600",
+              background: modo === "registrar" ? "#00f2fe" : "#1e293b",
+              color: modo === "registrar" ? "#000" : "#fff"
+            }}
+          >
+            + Registrar Nueva
+          </button>
+          <button
+            type="button"
+            onClick={() => { setModo("modificar"); limpiarFormulario(); }}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "600",
+              background: modo === "modificar" ? "#00f2fe" : "#1e293b",
+              color: modo === "modificar" ? "#000" : "#fff"
+            }}
+          >
+            ✏️ Modificar Existente (HU-31)
+          </button>
+        </div>
+
+        <form className="formulario" onSubmit={enviarFormulario}>
           <div className="formulario-cabecera">
             <div>
-              <h3>Información general</h3>
+              <h3>{modo === "registrar" ? "Información general" : "Editar datos de la sede"}</h3>
               <p>Los campos marcados con * son obligatorios.</p>
             </div>
 
             <span className="estado-nuevo">
               <span className="punto" />
-              Nueva sede
+              {modo === "registrar" ? "Nueva sede" : "Modificando sede"}
             </span>
           </div>
+
+          {modo === "modificar" && (
+            <div className="campo" style={{ marginBottom: "20px", background: "#0f172a", padding: "15px", borderRadius: "8px", border: "1px solid #334155" }}>
+              <label htmlFor="sedeSelect" style={{ color: "#00f2fe", fontWeight: "bold" }}>Selecciona el estacionamiento a modificar *</label>
+              <select
+                id="sedeSelect"
+                value={idSeleccionado}
+                onChange={seleccionarSedeAModificar}
+                style={{ width: "100%", padding: "10px", marginTop: "8px", borderRadius: "6px", background: "#1e293b", color: "#fff", border: "1px solid #475569" }}
+              >
+                <option value="">-- Selecciona una sede --</option>
+                {listaEstacionamientos.map((sede) => (
+                  <option key={sede.id} value={sede.id}>
+                    {sede.nombre} ({sede.ciudad})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="seccion-titulo">
             <MapPin size={19} />
@@ -305,17 +413,23 @@ function RegistrarEstacionamiento() {
             <button
               type="submit"
               className="boton-principal"
-              disabled={cargando}
+              disabled={cargando || (modo === "modificar" && !idSeleccionado)}
             >
               <Save size={18} />
-              {cargando ? "Registrando..." : "Registrar sede"}
+              {cargando
+                ? "Guardando..."
+                : modo === "registrar"
+                ? "Registrar sede"
+                : "Guardar cambios"}
             </button>
           </div>
         </form>
 
         <p className="nota-inferior">
           <CheckCircle2 size={15} />
-          La información se guardará en la base de datos del sistema.
+          {modo === "registrar"
+            ? "La información se guardará en la base de datos del sistema."
+            : "Los cambios se registrarán con fecha y usuario responsable en Firestore."}
         </p>
       </main>
     </div>

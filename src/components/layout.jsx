@@ -57,7 +57,7 @@ export default function Layout() {
     if (path.includes("estacionamientos")) return "Estacionamientos";
     if (path.includes("disponibilidad")) return "Disponibilidad";
     if (path.includes("finanzas")) return "Finanzas";
-    if (path.includes("registrar-estacionamiento")) return "Registrar Estacionamiento";
+    if (path.includes("registrar-estacionamiento")) return "Registrar y Editar Estacionamiento";
     if (path.includes("admin")) return "Panel de Administración";
     return "SmartPark IA";
   };
@@ -116,7 +116,7 @@ export default function Layout() {
                 <FaChartPie /> Finanzas
               </Link>
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
-                <FaClipboardList /> Registrar Estacionamiento
+                <FaClipboardList /> Registrar y Editar Estacionamiento
               </Link>
             </>
           )}
