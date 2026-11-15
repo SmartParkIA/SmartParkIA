@@ -9,7 +9,7 @@ const char* ssid = "INFINITUM51E3_2.4";
 const char* password = "J4qUNSkh5T";    
 
 const char* mqtt_server = "broker.hivemq.com"; 
-const int mqtt_port = 1883;                  
+const int mqtt_port = 1883;                 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -22,7 +22,7 @@ const int TRIG_PIN_1 = 5;
 const int ECHO_PIN_1 = 18;
 const char* mqtt_topic_1 = "smartpark/cajones/cajon_1/estado";
 bool estadoOcupadoAnterior_1 = false;
-const int DISTANCIA_UMBRAL_CM = 17; 
+const float DISTANCIA_UMBRAL_CM = 8.5; // Reducido a la mitad (antes 17)
 
 // Cajón 2 (Ultrasónico)
 const int TRIG_PIN_2 = 19;
@@ -188,7 +188,6 @@ void loop() {
 
   // ==========================================
   // LECTURA SENSOR 3 (Infrarrojo - Cajón 3)
-  // =================================omotor
   // ==========================================
   int valorIR = digitalRead(SENSOR_IR_PIN_3);
   bool estaOcupadoActual3 = (valorIR == LOW); 
