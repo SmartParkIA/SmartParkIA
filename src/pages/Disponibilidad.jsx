@@ -8,7 +8,8 @@ import {
   Radio,
   Wifi,
   WifiOff,
-  Sparkles
+  Sparkles,
+  KeyRound
 } from "lucide-react";
 
 import { collection, onSnapshot } from "firebase/firestore";
@@ -20,8 +21,9 @@ function Disponibilidad() {
   const [conexion, setConexion] = useState("conectando");
   const [ultimoMensaje, setUltimoMensaje] = useState(null);
   
-  // Estado para la predicción de la IA
+  // Estado para la predicción de la IA y el control del servomotor
   const [prediccion, setPrediccion] = useState(null);
+  const [abriendoBarrera, setAbriendoBarrera] = useState(false);
 
   useEffect(() => {
     const referencia = collection(db, "lugares");
@@ -108,6 +110,28 @@ function Disponibilidad() {
     return () => clearInterval(intervalo);
   }, []);
 
+  // Función para enviar la orden de abrir la barrera física mediante el servomotor
+  async function handleAbrirBarrera() {
+    try {
+      setAbriendoBarrera(true);
+      const respuesta = await fetch("http://localhost:3000/api/v1/barrera/abrir", {
+        method: "POST",
+      });
+      const resultado = await respuesta.json();
+
+      if (resultado.status === "success") {
+        alert("¡Acceso autorizado! Abriendo barrera física...");
+      } else {
+        alert("No se pudo abrir la barrera.");
+      }
+    } catch (error) {
+      console.error("Error al conectar con el servidor para abrir la barrera:", error);
+      alert("Error de conexión con el backend bridge.");
+    } finally {
+      setAbriendoBarrera(false);
+    }
+  }
+
   const total = espacios.length;
   const ocupados = espacios.filter((espacio) => espacio.estado === "ocupado").length;
   const libres = total - ocupados;
@@ -122,7 +146,7 @@ function Disponibilidad() {
     <div className="disponibilidad">
       <main className="disp-contenido">
         
-        {/* Título y Estado de Conexión */}
+        {/* Título y Estado de Conexión + Botón de Apertura de Barrera */}
         <div className="disp-titulo">
           <div>
             <span className="disp-subtitulo">MONITOREO / DISPONIBILIDAD</span>
@@ -130,15 +154,39 @@ function Disponibilidad() {
             <p>Consulta el estado actual de los espacios de estacionamiento.</p>
           </div>
 
-          <div className="disp-acciones-top">
+          <div className="disp-acciones-top" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+            {/* Botón para la tarea de apertura de barra con servomotor */}
+            <button
+              onClick={handleAbrirBarrera}
+              disabled={abriendoBarrera}
+              style={{
+                background: "#4f46e5",
+                color: "white",
+                border: "none",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "0.9rem",
+                boxShadow: "0 2px 4px rgba(79, 70, 229, 0.2)",
+                transition: "background 0.2s"
+              }}
+            >
+              <KeyRound size={16} />
+              {abriendoBarrera ? "Abriendo..." : "Abrir Barrera"}
+            </button>
+
             <div className={`conexion conexion-${conexion}`}>
               {conexion === "conectado" ? <Wifi size={17} /> : <WifiOff size={17} />}
               <span>
                 {conexion === "conectado"
                   ? "En línea"
                   : conexion === "conectando"
-                    ? "Conectando..."
-                    : "Error de conexión"}
+                  ? "Conectando..."
+                  : "Error de conexión"}
               </span>
             </div>
           </div>
@@ -268,7 +316,7 @@ function Disponibilidad() {
               : "Esperando la primera actualización del sensor..."}
           </p>
           <small>
-            <Radio size={14} /> ESP32 · HiveMQ MQTT · Firebase Firestore
+            <Radio size={14} /> ESP32 · HiveMQ MQTT · Firebase Firestore · Servomotor (Barrera)
           </small>
         </section>
 

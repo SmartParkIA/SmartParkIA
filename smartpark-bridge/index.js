@@ -55,7 +55,7 @@ app.get("/api/v1/prediccion/ocupacion", async (req, res) => {
       data: {
         diaSemana: diaSemana,
         horaConsulta: horaConsulta,
-        porcentajeEstimado: porcentajeReal, // ¡Ahora refleja el porcentaje real de tus sensores!
+        porcentajeEstimado: porcentajeReal,
         nivelSaturacion: nivel
       }
     });
@@ -63,6 +63,18 @@ app.get("/api/v1/prediccion/ocupacion", async (req, res) => {
     console.error("Error al calcular la predicción:", error);
     res.status(500).json({ status: "error", message: "No se pudo calcular la predicción", detalles: error.message });
   }
+});
+
+// NUEVO ENDPOINT: Ruta para ordenar la apertura de la barrera (Servomotor) vía MQTT
+app.post("/api/v1/barrera/abrir", (req, res) => {
+  client.publish("smartpark/barrera/control", "ABRIR", (err) => {
+    if (err) {
+      console.error("❌ Error al publicar comando MQTT para la barrera:", err);
+      return res.status(500).json({ status: "error", message: "No se pudo enviar la orden al ESP32" });
+    }
+    console.log("🔓 Comando 'ABRIR' enviado exitosamente al ESP32 (topic: smartpark/barrera/control)");
+    res.json({ status: "success", mensaje: "Orden de apertura de barrera enviada al dispositivo" });
+  });
 });
 
 // 3. Conexión al broker MQTT de HiveMQ
