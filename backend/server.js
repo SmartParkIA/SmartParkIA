@@ -24,6 +24,10 @@ const MQTT_TOPIC =
 
 let mqttConectado = false;
 
+// Memoria para detectar cambios de estado (Libre <-> Ocupado) sin duplicar lecturas
+const estadoPrevioCajones = new Map();
+const sesionActivaCajones = new Map();
+
 const clienteMQTT = mqtt.connect(MQTT_BROKER, {
   clientId: `smartpark_backend_${Math.random().toString(16).slice(2, 10)}`,
   clean: true,
@@ -63,6 +67,88 @@ clienteMQTT.on("error", (error) => {
 });
 
 // ==========================================
+// 1.1. REGISTRAR EVENTOS EN HISTORIAL DE OCUPACIÓN (HU-34)
+// ==========================================
+
+async function registrarCambioHistorialSensor(cajonId, ocupadoActual, distancia) {
+  try {
+    let estadoAnterior = estadoPrevioCajones.get(cajonId);
+
+    // Si el servidor acaba de iniciar, tomamos el último estado conocido en Firestore
+    if (estadoAnterior === undefined) {
+      const docPrevio = await db.collection("lugares").doc(cajonId).get();
+      estadoAnterior = docPrevio.exists ? Boolean(docPrevio.data().ocupado) : false;
+    }
+
+    estadoPrevioCajones.set(cajonId, ocupadoActual);
+
+    // Si el sensor sigue en el mismo estado, no creamos registros repetidos
+    if (estadoAnterior === ocupadoActual) {
+      return;
+    }
+
+    // Obtener el nombre de la sede activa para asociar el evento
+    let nombreEstacionamiento = "Estacionamiento Centro";
+    const estSnap = await db.collection("estacionamientos").limit(1).get();
+    if (!estSnap.empty && estSnap.docs[0].data().nombre) {
+      nombreEstacionamiento = estSnap.docs[0].data().nombre;
+    }
+
+    if (ocupadoActual === true) {
+      // LIBRE -> OCUPADO (Nuevo ingreso detectado por el sensor)
+      const nuevoRegistro = await db.collection("historial_ocupacion").add({
+        cajonId,
+        estacionamiento: nombreEstacionamiento,
+        distanciaEntrada: distancia,
+        horaOcupacion: FieldValue.serverTimestamp(),
+        horaLiberacion: null,
+        estado: "Ocupado"
+      });
+
+      sesionActivaCajones.set(cajonId, nuevoRegistro.id);
+      console.log(`Historial HU-34: Ingreso registrado en ${cajonId}`);
+    } else {
+      // OCUPADO -> LIBRE (Salida detectada por el sensor)
+      let docIdActivo = sesionActivaCajones.get(cajonId);
+
+      if (!docIdActivo) {
+        const abiertosSnap = await db
+          .collection("historial_ocupacion")
+          .where("cajonId", "==", cajonId)
+          .where("estado", "==", "Ocupado")
+          .limit(1)
+          .get();
+
+        if (!abiertosSnap.empty) {
+          docIdActivo = abiertosSnap.docs[0].id;
+        }
+      }
+
+      if (docIdActivo) {
+        await db.collection("historial_ocupacion").doc(docIdActivo).update({
+          horaLiberacion: FieldValue.serverTimestamp(),
+          distanciaSalida: distancia,
+          estado: "Completado"
+        });
+        sesionActivaCajones.delete(cajonId);
+        console.log(`Historial HU-34: Liberación registrada en ${cajonId}`);
+      } else {
+        await db.collection("historial_ocupacion").add({
+          cajonId,
+          estacionamiento: nombreEstacionamiento,
+          distanciaSalida: distancia,
+          horaOcupacion: FieldValue.serverTimestamp(),
+          horaLiberacion: FieldValue.serverTimestamp(),
+          estado: "Completado"
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error registrando cambio en historial_ocupacion:", err.message);
+  }
+}
+
+// ==========================================
 // 2. RECIBIR DATOS DEL ESP32 Y GUARDAR EN FIRESTORE
 // ==========================================
 
@@ -96,6 +182,10 @@ clienteMQTT.on("message", async (topic, payload) => {
       return;
     }
 
+    // Guardar evento histórico si cambió de libre a ocupado o viceversa
+    await registrarCambioHistorialSensor(cajonId, datos.ocupado, datos.distancia);
+
+    // Mantener actualización en tiempo real para Disponibilidad.jsx
     const estado = datos.ocupado ? "ocupado" : "disponible";
 
     const actualizacion = {
@@ -111,7 +201,7 @@ clienteMQTT.on("message", async (topic, payload) => {
       .set(actualizacion, { merge: true });
 
     console.log(
-      `Firestore actualizado: ${cajonId} - ${estado} (${datos.distancia} cm)`
+      `Firestore actualizado: ${cajonId} -> ${estado} (${datos.distancia} cm)`
     );
 
   } catch (error) {
@@ -374,6 +464,39 @@ app.get("/api/estacionamientos", async (req, res) => {
 
     return res.status(500).json({
       mensaje: "No fue posible consultar los estacionamientos."
+    });
+  }
+});
+
+// ==========================================
+// 5.1. CONSULTAR HISTORIAL DE OCUPACIÓN (HU-34)
+// ==========================================
+
+app.get("/api/historial-ocupacion", async (req, res) => {
+  try {
+    const consulta = await db
+      .collection("historial_ocupacion")
+      .orderBy("horaOcupacion", "desc")
+      .limit(100)
+      .get();
+
+    const registros = consulta.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        cajonId: data.cajonId || "cajon_01",
+        estacionamiento: data.estacionamiento || "Estacionamiento Centro",
+        horaOcupacionMs: data.horaOcupacion?.toMillis ? data.horaOcupacion.toMillis() : null,
+        horaLiberacionMs: data.horaLiberacion?.toMillis ? data.horaLiberacion.toMillis() : null,
+        estado: data.estado || "Completado"
+      };
+    });
+
+    return res.json(registros);
+  } catch (error) {
+    console.error("Error al consultar historial de ocupación:", error);
+    return res.status(500).json({
+      mensaje: "No fue posible consultar el historial de ocupación."
     });
   }
 });

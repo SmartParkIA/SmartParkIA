@@ -22,6 +22,7 @@ const Estacionamientos = lazy(() => import('./components/Estacionamientos.jsx'))
 const MapaEstacionamiento = lazy(() => import('./components/MapaEstacionamiento.jsx'));
 const Disponibilidad = lazy(() => import('./pages/Disponibilidad.jsx'));
 const RegistrarEstacionamiento = lazy(() => import('./pages/RegistrarEstacionamiento.jsx'));
+const HistorialOcupacion = lazy(() => import('./pages/HistorialOcupacion.jsx'));
 const Admin = lazy(() => import('./components/Admin.jsx'));
 
 // NUEVO: Importamos la página de Finanzas
@@ -83,6 +84,7 @@ function App() {
             <Route path="/finanzas" element={<RutaProtegida allowedRole="admin"><Finanzas /></RutaProtegida>} />
 
             <Route path="/registrar-estacionamiento" element={<RutaProtegida allowedRole="admin"><RegistrarEstacionamiento /></RutaProtegida>} />
+            <Route path="/historial-ocupacion" element={<RutaProtegida allowedRole="admin"><HistorialOcupacion /></RutaProtegida>} />
             
           </Route>
 
@@ -90,7 +92,7 @@ function App() {
         </Routes>
       </Suspense>
     </HashRouter>
-  )
+  );
 }
 
 export default App;

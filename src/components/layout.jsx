@@ -53,6 +53,7 @@ export default function Layout() {
     if (path.includes("perfil")) return "Mi Perfil";
     if (path.includes("reservar")) return "Reservar Espacio";
     if (path.includes("reservas")) return "Mis Reservas";
+    if (path.includes("historial-ocupacion")) return "Historial de Ocupación";
     if (path.includes("historial")) return "Historial";
     if (path.includes("estacionamientos")) return "Estacionamientos";
     if (path.includes("disponibilidad")) return "Disponibilidad";
@@ -117,6 +118,9 @@ export default function Layout() {
               </Link>
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClipboardList /> Registrar y Editar Estacionamiento
+              </Link>
+              <Link to="/historial-ocupacion" className={isActive("/historial-ocupacion")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaHistory /> Historial de Ocupación
               </Link>
             </>
           )}
