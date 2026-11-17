@@ -63,21 +63,22 @@ export default function ReservarEspacio() {
     setTimeout(() => setToast(null), 3200);
   };
 
+  // ✅ ARREGLO 1: Variables renombradas para evitar conflicto con el estado 'form'
   useEffect(() => {
-    const cajon = searchParams.get("cajon");
-    const est = searchParams.get("estacionamiento");
-    const f = searchParams.get("fecha");
-    const h = searchParams.get("horario");
-    const d = searchParams.get("duracion");
+    const cajonParam = searchParams.get("cajon");
+    const estParam = searchParams.get("estacionamiento");
+    const fechaParam = searchParams.get("fecha"); 
+    const horarioParam = searchParams.get("horario");
+    const duracionParam = searchParams.get("duracion");
 
-    if (cajon || est || f || h || d) {
-      setForm((f) => ({
-        ...f,
-        ...(cajon ? { espacio: cajon } : {}),
-        ...(est ? { estacionamiento: est } : {}),
-        ...(f ? { fecha: f } : {}),
-        ...(h ? { horario: h } : {}),
-        ...(d ? { duracion: d } : {}),
+    if (cajonParam || estParam || fechaParam || horarioParam || duracionParam) {
+      setForm((prevForm) => ({
+        ...prevForm,
+        ...(cajonParam ? { espacio: cajonParam } : {}),
+        ...(estParam ? { estacionamiento: estParam } : {}),
+        ...(fechaParam ? { fecha: fechaParam } : {}),
+        ...(horarioParam ? { horario: horarioParam } : {}),
+        ...(duracionParam ? { duracion: duracionParam } : {}),
       }));
     }
   }, [searchParams]);
@@ -193,7 +194,6 @@ export default function ReservarEspacio() {
     return false;
   };
 
-  // 🔥 AHORA MOSTRAMOS LAS 24 HORAS PARA QUE PUEDAS PROBAR LA RESERVA DE LA 01:25
   const horasDisponibles = [];
   for (let i = 0; i <= 23; i++) {
     const horaStr = `${String(i).padStart(2, "0")}:00`;
@@ -251,10 +251,21 @@ export default function ReservarEspacio() {
     setImagenBase64("");
   };
 
+  // ✅ ARREGLO 2: Validaciones añadidas antes de guardar para que el botón no falle en silencio
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (reservasActivas.length >= MAX_RESERVAS) return showToast(`Solo puedes tener hasta ${MAX_RESERVAS} reservas activas.`, "error");
+    
+    if (reservasActivas.length >= MAX_RESERVAS) {
+      return showToast(`Solo puedes tener hasta ${MAX_RESERVAS} reservas activas.`, "error");
+    }
+    if (!form.estacionamiento) return showToast("Selecciona un estacionamiento.", "error");
+    if (!form.espacio) return showToast("Selecciona un cajón.", "error");
+    if (!form.fecha) return showToast("Selecciona una fecha válida.", "error");
     if (!form.horario) return showToast("Selecciona una hora disponible.", "error");
+    
+    if (!form.marca || !form.modelo || !form.placa) {
+      return showToast("Completa los datos del vehículo.", "error");
+    }
     
     setSaving(true);
     try {
@@ -492,7 +503,7 @@ export default function ReservarEspacio() {
         </div>
       </div>
 
-      {/* TOAST Y ESTILOS (Se mantienen los tuyos) */}
+      {/* TOAST Y ESTILOS */}
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.type === "success" ? <FaCheckCircle /> : <FaTimesCircle />}
@@ -501,8 +512,7 @@ export default function ReservarEspacio() {
       )}
 
       <style>{`
-        /* ... (AQUI PEGAS TODOS TUS ESTILOS ORIGINALES DE FONDO, CARRO, ETC) ... */
-   /* ========== KEYFRAMES ========== */
+        /* ========== KEYFRAMES ========== */
         @keyframes fadeIn       { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeInUp     { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes spin         { to { transform: rotate(360deg); } }
@@ -544,7 +554,6 @@ export default function ReservarEspacio() {
         @keyframes confettiFall { 0% { transform: translateY(-20px) rotate(0); opacity: 1; } 100% { transform: translateY(120px) rotate(360deg); opacity: 0; } }
         @keyframes orbitSpin    { to { transform: rotate(360deg); } }
         @keyframes orbitSpinRev { to { transform: rotate(-360deg); } }
-        
         @keyframes errorSlide   { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 
         /* ========== BASE ========== */
@@ -583,16 +592,6 @@ export default function ReservarEspacio() {
           mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
           -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
         }
-        .bg-particle {
-          position: absolute; width: 6px; height: 6px;
-          border-radius: 50%; background: #00f2fe;
-          box-shadow: 0 0 12px rgba(0,242,254,.8);
-        }
-        .bp1 { top: 12%; left: 10%; animation: particleFloat 12s ease-in-out infinite; }
-        .bp2 { top: 68%; left: 20%; background: #8b5cf6; box-shadow: 0 0 12px rgba(139,92,246,.8); animation: particleFloat 16s ease-in-out 1s infinite; }
-        .bp3 { top: 30%; right: 15%; background: #10b981; box-shadow: 0 0 12px rgba(16,185,129,.8); animation: particleFloat 14s ease-in-out 2s infinite; }
-        .bp4 { top: 78%; right: 22%; animation: particleFloat 18s ease-in-out 3s infinite; }
-        .bp5 { top: 50%; left: 50%; background: #f59e0b; box-shadow: 0 0 12px rgba(245,158,11,.8); animation: particleFloat 20s ease-in-out 4s infinite; }
 
         /* ========== HEADER ========== */
         .res-header {
@@ -767,21 +766,6 @@ export default function ReservarEspacio() {
         .wheel-bl { bottom: 16px; left: -8px; }
         .wheel-br { bottom: 16px; right: -8px; }
 
-        .sparkles { position: absolute; inset: 0; pointer-events: none; }
-        .sparkles span {
-          position: absolute; width: 6px; height: 6px;
-          background: #00f2fe;
-          border-radius: 50%;
-          box-shadow: 0 0 10px rgba(0,242,254,.8);
-          animation: sparkleTwinkle 2.4s ease-in-out infinite;
-        }
-        .sparkles span:nth-child(1) { top: 8%; left: 6%; animation-delay: 0s; }
-        .sparkles span:nth-child(2) { top: 18%; right: 8%; animation-delay: .3s; }
-        .sparkles span:nth-child(3) { top: 48%; left: 2%; animation-delay: .6s; }
-        .sparkles span:nth-child(4) { top: 62%; right: 4%; animation-delay: .9s; }
-        .sparkles span:nth-child(5) { top: 78%; left: 8%; animation-delay: 1.2s; }
-        .sparkles span:nth-child(6) { top: 82%; right: 12%; animation-delay: 1.5s; }
-
         /* ========== TIPS ========== */
         .tips-box {
           background: rgba(0,242,254,.05);
@@ -824,24 +808,6 @@ export default function ReservarEspacio() {
           color: #00f2fe; font-size: 11px;
         }
         .tips-box li strong { color: #00f2fe; }
-
-        .mini-perks {
-          display: flex; gap: 6px; flex-wrap: wrap;
-          justify-content: center; width: 100%;
-          animation: fadeInUp .8s ease .4s backwards;
-        }
-        .perk {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 5px 10px;
-          background: rgba(16,185,129,.1);
-          border: 1px solid rgba(16,185,129,.3);
-          border-radius: 999px;
-          font-size: 10.5px; font-weight: 700;
-          color: #10b981;
-          text-transform: uppercase;
-          letter-spacing: .4px;
-        }
-        .perk svg { font-size: 10px; }
 
         /* ========== FORM ========== */
         .reserva-info { display: flex; flex-direction: column; gap: 18px; }
@@ -886,31 +852,8 @@ export default function ReservarEspacio() {
           box-shadow: 0 0 0 3px rgba(0,242,254,.15);
           transform: translateY(-1px);
         }
-        .field .hint {
-          color: #64748b; font-size: 12px; margin-top: 2px;
-          display: inline-flex; align-items: center; gap: 5px;
-        }
-        .field .hint svg { color: #00f2fe; font-size: 10px; }
         .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; animation: fieldSlideIn .5s ease .3s backwards; }
         .row .field { margin-bottom: 0; }
-
-        /* --- ESTILOS DE ERROR --- */
-        .field input.input-error, .form-input.input-error {
-          border-color: #ef4444 !important;
-          box-shadow: 0 0 12px rgba(239, 68, 68, 0.3) !important;
-          background: rgba(239, 68, 68, 0.05);
-        }
-        .field input.input-error:focus, .form-input.input-error:focus {
-          border-color: #ef4444 !important;
-          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2), 0 0 12px rgba(239, 68, 68, 0.4) !important;
-        }
-        .error-text {
-          display: flex; align-items: center; gap: 6px;
-          color: #ef4444; font-size: 12px; font-weight: 600;
-          margin-top: 4px;
-          animation: errorSlide 0.3s ease-out;
-        }
-        .error-text svg { font-size: 14px; }
 
         /* Inputs con icono */
         .input-icon { position: relative; display: flex; align-items: center; width: 100%; }
@@ -950,11 +893,6 @@ export default function ReservarEspacio() {
           transform: translateY(-2px) scale(1.03);
           box-shadow: 0 8px 20px rgba(0,242,254,.45);
         }
-        .btn-mapa-arrow {
-          font-size: 10px;
-          transition: transform .3s;
-        }
-        .btn-mapa:hover .btn-mapa-arrow { transform: translateX(3px); }
 
         /* Costo */
         .cost-box {
@@ -1013,14 +951,6 @@ export default function ReservarEspacio() {
           font-size: 11px;
         }
         .cost-info svg { color: #00f2fe; font-size: 11px; }
-        .cost-shine {
-          position: absolute; top: 0; left: 0;
-          width: 60px; height: 100%;
-          background: linear-gradient(90deg,transparent,rgba(0,242,254,.2),transparent);
-          transform: translateX(-120%) skewX(-20deg);
-          animation: costShimmer 3s ease-in-out infinite;
-          pointer-events: none;
-        }
 
         /* Sección título */
         .section-title {
@@ -1078,31 +1008,6 @@ export default function ReservarEspacio() {
         .veh-switch button:disabled { cursor: not-allowed; }
 
         /* ========== VEH REGISTRADO ========== */
-        .select-wrapper {
-          position: relative;
-          margin-bottom: 10px;
-        }
-        .select-wrapper .select-icon {
-          position: absolute; left: 14px; top: 50%;
-          transform: translateY(-50%);
-          color: #00f2fe; font-size: 14px;
-          pointer-events: none;
-          z-index: 1;
-        }
-        .select-wrapper select {
-          appearance: none;
-          padding-left: 40px !important;
-          padding-right: 36px !important;
-          cursor: pointer;
-          width: 100%;
-        }
-        .select-chevron {
-          position: absolute; right: 14px; top: 50%;
-          transform: translateY(-50%) rotate(90deg);
-          color: #64748b; font-size: 11px;
-          pointer-events: none;
-        }
-
         .veh-preview {
           position: relative;
           display: flex; align-items: center; gap: 14px;
@@ -1131,14 +1036,6 @@ export default function ReservarEspacio() {
           letter-spacing: 1px;
           display: inline-flex; align-items: center; gap: 4px;
         }
-        .veh-preview-shine {
-          position: absolute; top: 0; left: 0;
-          width: 60px; height: 100%;
-          background: linear-gradient(90deg,transparent,rgba(0,242,254,.2),transparent);
-          transform: translateX(-120%) skewX(-20deg);
-          animation: costShimmer 4s ease-in-out infinite;
-          pointer-events: none;
-        }
 
         /* ========== VEH MANUAL ========== */
         .veh-manual {
@@ -1166,13 +1063,6 @@ export default function ReservarEspacio() {
         .upload-box input {
           position: absolute; inset: 0;
           opacity: 0; cursor: pointer;
-        }
-        .upload-ring {
-          position: absolute; inset: -6px;
-          border: 1.5px solid rgba(0,242,254,.4);
-          border-radius: 14px;
-          animation: tipRing 2.5s ease-out infinite;
-          pointer-events: none;
         }
         .upload-text { display: flex; flex-direction: column; gap: 2px; }
         .upload-text strong { color: #e2e8f0; font-size: 13px; }
@@ -1203,113 +1093,6 @@ export default function ReservarEspacio() {
         }
         .btn-submit:disabled { opacity: .7; cursor: not-allowed; }
         .btn-rocket { animation: rocketBob 1.6s ease-in-out infinite; }
-        .btn-amount {
-          display: inline-flex; align-items: center; gap: 4px;
-          padding: 4px 10px;
-          background: rgba(15,23,42,.25);
-          border-radius: 8px;
-          font-size: 13px; font-weight: 900;
-        }
-        .btn-amount svg { font-size: 11px; }
-        .btn-chevron { animation: chevronSlide 1.4s ease-in-out infinite; font-size: 12px; }
-        .btn-shine-1, .btn-shine-2 {
-          position: absolute; top: 0; left: 0;
-          width: 60px; height: 100%;
-          background: linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
-          transform: translateX(-120%) skewX(-20deg);
-          pointer-events: none;
-        }
-        .btn-shine-1 { animation: shineSweep 3s ease-in-out infinite; }
-        .btn-shine-2 { animation: shineSweep 3s ease-in-out 1.5s infinite; }
-
-        /* ========== FLASH DE ÉXITO ========== */
-        .success-flash {
-          position: fixed; inset: 0;
-          background: rgba(15,23,42,.92);
-          backdrop-filter: blur(14px);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 20000;
-          animation: flashIn .3s ease;
-          padding: 20px;
-        }
-        .success-flash-inner {
-          position: relative;
-          text-align: center;
-          padding: 40px 30px;
-          max-width: 420px; width: 100%;
-          background: linear-gradient(135deg,#1e293b,#0f172a);
-          border: 1px solid rgba(0,242,254,.3);
-          border-radius: 24px;
-          box-shadow: 0 30px 80px rgba(0,0,0,.6);
-          animation: successPop .5s cubic-bezier(.34,1.56,.64,1);
-          overflow: hidden;
-        }
-        .success-icon {
-          position: relative;
-          width: 90px; height: 90px;
-          margin: 0 auto 20px;
-          background: linear-gradient(135deg,#10b981,#34d399);
-          color: #fff;
-          border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 44px;
-          box-shadow: 0 15px 40px rgba(16,185,129,.5);
-          animation: pop .6s cubic-bezier(.34,1.56,.64,1);
-        }
-        .success-ring-1, .success-ring-2 {
-          position: absolute; inset: -8px;
-          border: 2px solid rgba(16,185,129,.5);
-          border-radius: 50%;
-          animation: ringPulse 2s ease-out infinite;
-          pointer-events: none;
-        }
-        .success-ring-2 { animation-delay: 1s; }
-        .success-flash-inner h2 {
-          color: #fff; font-size: 22px;
-          margin: 0 0 8px;
-          animation: fadeInUp .5s ease .2s backwards;
-        }
-        .success-flash-inner p {
-          color: #94a3b8; font-size: 14px;
-          margin: 0 0 22px;
-          display: inline-flex; align-items: center; gap: 6px;
-          animation: fadeInUp .5s ease .35s backwards;
-        }
-        .success-flash-inner p svg { color: #00f2fe; }
-        .success-progress {
-          width: 100%; height: 4px;
-          background: rgba(255,255,255,.08);
-          border-radius: 999px;
-          overflow: hidden;
-          animation: fadeInUp .5s ease .4s backwards;
-        }
-        .success-progress span {
-          display: block;
-          height: 100%;
-          background: linear-gradient(90deg,#10b981,#00f2fe,#4facfe);
-          border-radius: 999px;
-          width: 0;
-          animation: progressFill 1.4s ease-out forwards;
-        }
-        .success-confetti {
-          position: absolute; inset: 0;
-          pointer-events: none; overflow: hidden;
-        }
-        .success-confetti span {
-          position: absolute;
-          width: 8px; height: 8px;
-          border-radius: 50%;
-          top: 0;
-          animation: confettiFall 1.4s ease-out forwards;
-        }
-        .success-confetti span:nth-child(1) { left: 12%; background: #00f2fe; animation-delay: .1s; }
-        .success-confetti span:nth-child(2) { left: 26%; background: #10b981; animation-delay: .2s; }
-        .success-confetti span:nth-child(3) { left: 40%; background: #f59e0b; animation-delay: .15s; }
-        .success-confetti span:nth-child(4) { left: 55%; background: #8b5cf6; animation-delay: .25s; }
-        .success-confetti span:nth-child(5) { left: 68%; background: #00f2fe; animation-delay: .3s; }
-        .success-confetti span:nth-child(6) { left: 82%; background: #10b981; animation-delay: .2s; }
-        .success-confetti span:nth-child(7) { left: 18%; background: #ef4444; animation-delay: .35s; }
-        .success-confetti span:nth-child(8) { left: 74%; background: #f59e0b; animation-delay: .4s; }
 
         /* ========== TOAST ========== */
         .toast {
@@ -1322,7 +1105,6 @@ export default function ReservarEspacio() {
           animation: toastIn .35s cubic-bezier(.34,1.56,.64,1);
           z-index: 10001;
         }
-        .toast-icon { display: flex; animation: toastBounce 1s ease-in-out infinite; }
         .toast.success { background: #10b981; color: #0f172a; }
         .toast.error   { background: #ef4444; color: #fff; animation: toastIn .35s cubic-bezier(.34,1.56,.64,1), shake .4s ease .35s; }
 
@@ -1359,109 +1141,89 @@ export default function ReservarEspacio() {
           .cost-box { flex-wrap: wrap; }
           .cost-info { width: 100%; justify-content: center; }
         }
-/* ==========================================
-   🔥 ESTILOS MEJORADOS: SEMÁFORO Y HORARIOS
-   ========================================== */
 
-/* Semáforo con animación de pulso */
-.semaforo-badge {
-  margin-top: 8px; 
-  display: inline-flex; 
-  align-items: center; 
-  gap: 6px;
-  padding: 6px 14px; 
-  border-radius: 20px; 
-  font-size: 12px; 
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  width: fit-content; 
-  animation: fadeIn 0.3s ease, badgePulse 2s infinite alternate;
-  box-shadow: 0 0 10px currentColor;
-  border-width: 1px;
-  border-style: solid;
-}
+        /* ==========================================
+           🔥 ESTILOS MEJORADOS: SEMÁFORO Y HORARIOS
+           ========================================== */
+        .semaforo-badge {
+          margin-top: 8px; 
+          display: inline-flex; 
+          align-items: center; 
+          gap: 6px;
+          padding: 6px 14px; 
+          border-radius: 20px; 
+          font-size: 12px; 
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          width: fit-content; 
+          animation: fadeIn 0.3s ease, badgePulse 2s infinite alternate;
+          box-shadow: 0 0 10px currentColor;
+          border-width: 1px;
+          border-style: solid;
+        }
 
-/* Contenedor de las horas (Fondo sutil para agruparlos) */
-.time-grid {
-  display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); /* Botones un poco más anchos */
-  gap: 10px; 
-  margin-top: 10px; 
-  max-height: 220px; 
-  overflow-y: auto; 
-  padding: 12px;
-  background: rgba(15, 23, 42, 0.4); /* Fondo para enmarcar el selector */
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+        .time-grid {
+          display: grid; 
+          grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+          gap: 10px; 
+          margin-top: 10px; 
+          max-height: 220px; 
+          overflow-y: auto; 
+          padding: 12px;
+          background: rgba(15, 23, 42, 0.4);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
 
-/* Scrollbar estilo Cyberpunk */
-.time-grid::-webkit-scrollbar {
-  width: 6px;
-}
-.time-grid::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
-}
-.time-grid::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 10px;
-}
-.time-grid::-webkit-scrollbar-thumb:hover {
-  background: #00f2fe;
-}
+        .time-grid::-webkit-scrollbar { width: 6px; }
+        .time-grid::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 10px; }
+        .time-grid::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .time-grid::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
 
-/* Botón de hora base */
-.time-btn {
-  background: rgba(30, 41, 59, 0.8); 
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0; 
-  padding: 10px 0; 
-  border-radius: 10px; 
-  font-weight: 700;
-  cursor: pointer; 
-  transition: all 0.2s ease; 
-  font-family: inherit; 
-  font-size: 14px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+        .time-btn {
+          background: rgba(30, 41, 59, 0.8); 
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #e2e8f0; 
+          padding: 10px 0; 
+          border-radius: 10px; 
+          font-weight: 700;
+          cursor: pointer; 
+          transition: all 0.2s ease; 
+          font-family: inherit; 
+          font-size: 14px;
+          display: flex; justify-content: center; align-items: center;
+        }
 
-/* Efecto al pasar el mouse (Hover) */
-.time-btn:hover:not(.blocked) { 
-  border-color: rgba(0, 242, 254, 0.6); 
-  background: rgba(0, 242, 254, 0.15); 
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 242, 254, 0.2);
-  color: #00f2fe;
-}
+        .time-btn:hover:not(.blocked) { 
+          border-color: rgba(0, 242, 254, 0.6); 
+          background: rgba(0, 242, 254, 0.15); 
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 242, 254, 0.2);
+          color: #00f2fe;
+        }
 
-/* Botón seleccionado (Activo) */
-.time-btn.selected { 
-  background: linear-gradient(135deg, #00f2fe, #0072ff);
-  color: #050b14; /* Texto oscuro para mejor contraste */
-  border-color: #00f2fe; 
-  box-shadow: 0 0 15px rgba(0, 242, 254, 0.5);
-  font-weight: 900;
-  transform: scale(1.02); /* Un zoom muy leve */
-}
+        .time-btn.selected { 
+          background: linear-gradient(135deg, #00f2fe, #0072ff);
+          color: #050b14;
+          border-color: #00f2fe; 
+          box-shadow: 0 0 15px rgba(0, 242, 254, 0.5);
+          font-weight: 900;
+          transform: scale(1.02);
+        }
 
-/* Botón Bloqueado (Ocupado) - Sin tachado, solo apagado */
-.time-btn.blocked { 
-  background: rgba(15, 23, 42, 0.6); 
-  color: #475569; /* Gris oscuro */
-  border-color: rgba(255, 255, 255, 0.02); 
-  cursor: not-allowed; 
-  opacity: 0.6;
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5); /* Efecto hundido */
-}
+        .time-btn.blocked { 
+          background: rgba(15, 23, 42, 0.6); 
+          color: #475569;
+          border-color: rgba(255, 255, 255, 0.02); 
+          cursor: not-allowed; 
+          opacity: 0.6;
+          box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
 
-/* Animaciones para el semáforo */
-@keyframes badgePulse {
-  0% { box-shadow: 0 0 5px currentColor; }
-  100% { box-shadow: 0 0 15px currentColor; }
-}
+        @keyframes badgePulse {
+          0% { box-shadow: 0 0 5px currentColor; }
+          100% { box-shadow: 0 0 15px currentColor; }
+        }
       `}</style>
     </div>
   );
