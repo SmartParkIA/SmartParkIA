@@ -32,6 +32,9 @@ function RegistrarEstacionamiento() {
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
 
+  // 🌍 URL dinámica del backend (Local vs Producción)
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
   function manejarCambio(evento) {
     const { name, value } = evento.target;
     setFormulario((anterior) => ({ ...anterior, [name]: value }));
@@ -79,8 +82,9 @@ function RegistrarEstacionamiento() {
 
     setCargando(true);
     try {
+      // 🚀 Usamos la URL dinámica aquí
       const respuesta = await fetch(
-        "http://localhost:3001/api/estacionamientos",
+        `${API_URL}/api/estacionamientos`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -113,7 +117,7 @@ function RegistrarEstacionamiento() {
         tipo: "error",
         texto:
           error.message === "Failed to fetch"
-            ? "No hay conexión con el servidor. Verifica que el backend esté iniciado."
+            ? "No hay conexión con el servidor. Verifica tu conexión a internet o que el backend esté activo."
             : error.message,
       });
     } finally {
