@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import {
-  History,
-  Filter,
-  CheckCircle2,
-  Clock,
-  RotateCcw
+    CheckCircle2,
+    Clock,
+    Filter,
+    History,
+    RotateCcw
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { db } from "../firebase/config.js";
-import "../styles/RegistrarEstacionamiento.css";
+import "../styles/RegistrarEstacionamiento.css"; // Usamos tus estilos base
 
 function normalizarTexto(texto) {
   return String(texto || "")
@@ -62,16 +62,18 @@ function HistorialOcupacion() {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(false);
 
-  // Filtros de la HU-34
+  // Filtros
   const [filtroEstacionamiento, setFiltroEstacionamiento] = useState("");
   const [filtroEspacio, setFiltroEspacio] = useState("");
   const [filtroFechaInicio, setFiltroFechaInicio] = useState("");
   const [filtroFechaFin, setFiltroFechaFin] = useState("");
 
+  // 🌍 URL dinámica del backend
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
   useEffect(() => {
     cargarDatosIniciales(false);
 
-    // Refresco automático cada 5 segundos para ver nuevos ingresos/salidas del circuito
     const intervalo = setInterval(() => {
       cargarDatosIniciales(true);
     }, 5000);
@@ -84,9 +86,9 @@ function HistorialOcupacion() {
     let listaSedes = [];
     const registrosCargados = [];
 
-    // 1. Cargar lista real de estacionamientos desde el backend
+    // 1. Cargar estacionamientos
     try {
-      const respEst = await fetch("http://localhost:3001/api/estacionamientos");
+      const respEst = await fetch(`${API_URL}/api/estacionamientos`);
       if (respEst.ok) {
         listaSedes = await respEst.json();
       }
@@ -94,10 +96,10 @@ function HistorialOcupacion() {
       console.warn("No se pudieron cargar sedes desde el backend:", error);
     }
 
-    // 2. Consultar todos los eventos históricos registrados por los sensores IoT
+    // 2. Historial de sensores IoT
     let tieneHistorialSensores = false;
     try {
-      const respHist = await fetch("http://localhost:3001/api/historial-ocupacion");
+      const respHist = await fetch(`${API_URL}/api/historial-ocupacion`);
       if (respHist.ok) {
         const eventosSensor = await respHist.json();
         if (eventosSensor.length > 0) {
@@ -131,7 +133,7 @@ function HistorialOcupacion() {
       console.warn("No se pudo leer el historial de sensores:", error);
     }
 
-    // 3. Si aún no hay ciclos acumulados, mostramos el estado actual de "lugares"
+    // 3. Fallback: Colección "lugares" si no hay historial
     if (!tieneHistorialSensores) {
       try {
         const snapLugares = await getDocs(collection(db, "lugares"));
@@ -139,13 +141,9 @@ function HistorialOcupacion() {
 
         snapLugares.forEach((docSnap) => {
           const l = docSnap.data();
-          if (typeof l.ocupado !== "boolean" && typeof l.estado !== "string") {
-            return;
-          }
+          if (typeof l.ocupado !== "boolean" && typeof l.estado !== "string") return;
 
-          const ocupado =
-            typeof l.ocupado === "boolean" ? l.ocupado : l.estado === "ocupado";
-
+          const ocupado = typeof l.ocupado === "boolean" ? l.ocupado : l.estado === "ocupado";
           const fechaAct = l.ultimaActualizacion?.toDate
             ? l.ultimaActualizacion.toDate()
             : l.ultimaActualizacion
@@ -154,8 +152,7 @@ function HistorialOcupacion() {
 
           const fechaLocal = formatearFechaLocal(fechaAct);
           const horaLocal = formatearHoraLocal(fechaAct);
-          const distanciaTxt =
-            typeof l.distancia === "number" ? ` · ${l.distancia} cm` : "";
+          const distanciaTxt = typeof l.distancia === "number" ? ` · ${l.distancia} cm` : "";
 
           registrosCargados.push({
             id: `sensor-${docSnap.id}`,
@@ -172,7 +169,7 @@ function HistorialOcupacion() {
       }
     }
 
-    // 4. Consultar registros históricos desde la colección "reservas" en Firestore
+    // 4. Colección "reservas" de Firestore
     try {
       const snapReservas = await getDocs(collection(db, "reservas"));
       const ahora = new Date();
@@ -211,7 +208,7 @@ function HistorialOcupacion() {
       console.warn("No se pudo leer la colección reservas:", error);
     }
 
-    // Ordenar del más reciente al más antiguo
+    // Ordenar
     registrosCargados.sort((a, b) =>
       (b.horaOcupacion || "").localeCompare(a.horaOcupacion || "")
     );
@@ -233,7 +230,7 @@ function HistorialOcupacion() {
     setFiltroFechaFin("");
   }
 
-  // Filtrado dinámico por estacionamiento, espacio y rango de fechas (HU-34)
+  // Filtrado dinámico
   const historialFiltrado = historial.filter((item) => {
     const coincideEstacionamiento = filtroEstacionamiento
       ? normalizarTexto(item.estacionamiento) === normalizarTexto(filtroEstacionamiento)
@@ -264,6 +261,99 @@ function HistorialOcupacion() {
 
   return (
     <div className="pagina">
+      {/* 🎨 ESTILOS RESPONSIVOS INTEGRADOS */}
+      <style>{`
+        .tabla-historial-wrapper {
+          overflow-x: auto;
+          margin-top: 15px;
+        }
+        .tabla-historial {
+          width: 100%;
+          border-collapse: collapse;
+          color: #fff;
+          text-align: left;
+        }
+        .tabla-historial th {
+          border-bottom: 1px solid #334155;
+          color: #00f2fe;
+          font-size: 14px;
+          padding: 12px;
+        }
+        .tabla-historial td {
+          border-bottom: 1px solid #1e293b;
+          font-size: 13px;
+          padding: 12px;
+        }
+        
+        .badge-estado {
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .badge-ocupado { background: #ef444433; color: #ef4444; }
+        .badge-completado { background: #10b98133; color: #10b981; }
+
+        /* 📱 DISEÑO RESPONSIVO PARA CELULARES */
+        @media (max-width: 768px) {
+          .tabla-historial-wrapper {
+            overflow-x: visible;
+          }
+          .tabla-historial thead {
+            display: none;
+          }
+          .tabla-historial, .tabla-historial tbody, .tabla-historial tr, .tabla-historial td {
+            display: block;
+            width: 100%;
+          }
+          .tabla-historial tr {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+          }
+          .tabla-historial td {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(255,255,255,0.05);
+            text-align: right;
+          }
+          .tabla-historial td:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-top: 8px;
+          }
+          .tabla-historial td::before {
+            content: attr(data-label);
+            font-weight: 700;
+            color: #00f2fe;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 15px;
+            text-align: left;
+            flex-shrink: 0;
+          }
+          /* Destacar el estacionamiento como título de la tarjeta */
+          .tabla-historial td[data-label="Estacionamiento"] {
+            font-size: 16px;
+            color: #fff;
+            border-bottom: 2px solid rgba(0, 242, 254, 0.2);
+            padding-top: 0;
+            margin-bottom: 8px;
+            display: block;
+            text-align: left;
+          }
+          .tabla-historial td[data-label="Estacionamiento"]::before {
+            display: none;
+          }
+        }
+      `}</style>
+
       <main className="contenido">
         {/* Migas de pan */}
         <div className="ruta">
@@ -382,69 +472,45 @@ function HistorialOcupacion() {
             </span>
           </div>
 
-          <div style={{ overflowX: "auto", marginTop: "15px" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                color: "#fff",
-                textAlign: "left"
-              }}
-            >
+          <div className="tabla-historial-wrapper">
+            <table className="tabla-historial">
               <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid #334155",
-                    color: "#00f2fe",
-                    fontSize: "14px"
-                  }}
-                >
-                  <th style={{ padding: "12px" }}>Estacionamiento</th>
-                  <th style={{ padding: "12px" }}>Espacio</th>
-                  <th style={{ padding: "12px" }}>Hora de Ocupación</th>
-                  <th style={{ padding: "12px" }}>Hora de Liberación</th>
-                  <th style={{ padding: "12px" }}>Estado</th>
+                <tr>
+                  <th>Estacionamiento</th>
+                  <th>Espacio</th>
+                  <th>Hora de Ocupación</th>
+                  <th>Hora de Liberación</th>
+                  <th>Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {historialFiltrado.length > 0 ? (
                   historialFiltrado.map((item) => (
-                    <tr
-                      key={item.id}
-                      style={{
-                        borderBottom: "1px solid #1e293b",
-                        fontSize: "13px"
-                      }}
-                    >
-                      <td style={{ padding: "12px", fontWeight: "600" }}>
+                    <tr key={item.id}>
+                      {/* Añadimos data-label para el diseño responsivo */}
+                      <td data-label="Estacionamiento" style={{ fontWeight: "600" }}>
                         {item.estacionamiento}
                       </td>
-                      <td style={{ padding: "12px" }}>{item.espacio}</td>
-                      <td style={{ padding: "12px" }}>
+                      <td data-label="Espacio">{item.espacio}</td>
+                      <td data-label="Ocupación">
                         <Clock
                           size={14}
-                          style={{ marginRight: 6, verticalAlign: "middle", color: "#00f2fe" }}
+                          style={{ marginRight: 6, color: "#00f2fe" }}
                         />
                         {item.horaOcupacion}
                       </td>
-                      <td style={{ padding: "12px" }}>
+                      <td data-label="Liberación">
                         <Clock
                           size={14}
-                          style={{ marginRight: 6, verticalAlign: "middle", color: "#94a3b8" }}
+                          style={{ marginRight: 6, color: "#94a3b8" }}
                         />
                         {item.horaLiberacion}
                       </td>
-                      <td style={{ padding: "12px" }}>
+                      <td data-label="Estado">
                         <span
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            background:
-                              item.estado === "Ocupado" ? "#ef444433" : "#10b98133",
-                            color: item.estado === "Ocupado" ? "#ef4444" : "#10b981"
-                          }}
+                          className={`badge-estado ${
+                            item.estado === "Ocupado" ? "badge-ocupado" : "badge-completado"
+                          }`}
                         >
                           {item.estado}
                         </span>
@@ -458,7 +524,9 @@ function HistorialOcupacion() {
                       style={{
                         textAlign: "center",
                         padding: "24px",
-                        color: "#94a3b8"
+                        color: "#94a3b8",
+                        display: "block", // Necesario para que se vea bien en móvil
+                        width: "100%"
                       }}
                     >
                       No se encontraron registros con los filtros seleccionados.

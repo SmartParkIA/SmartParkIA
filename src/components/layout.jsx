@@ -7,7 +7,8 @@ import {
   FaCheckCircle, FaClipboardList,
   FaCog, FaHistory, FaMapMarkedAlt, FaParking, FaSignOutAlt,
   FaTimes, FaUser,
-  FaClock // <-- NUEVO: Icono para el historial de ocupación
+  FaClock, // Para Historial de Ocupación
+  FaBuilding // Para el CRUD de Estacionamientos
 } from "react-icons/fa";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
@@ -56,8 +57,9 @@ export default function Layout() {
     if (path.includes("perfil")) return "Mi Perfil";
     if (path.includes("reservar")) return "Reservar Espacio";
     if (path.includes("reservas")) return "Mis Reservas";
-    if (path.includes("historial-ocupacion")) return "Historial de Ocupación"; // <-- NUEVO
+    if (path.includes("historial-ocupacion")) return "Historial de Ocupación";
     if (path.includes("historial")) return "Historial";
+    if (path.includes("crud-estacionamiento")) return "Administrar Estacionamientos";
     if (path.includes("estacionamientos")) return "Estacionamientos";
     if (path.includes("disponibilidad")) return "Disponibilidad";
     if (path.includes("finanzas")) return "Finanzas";
@@ -122,7 +124,13 @@ export default function Layout() {
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClipboardList /> Registrar Estacionamiento
               </Link>
-              {/* 👇 NUEVO ENLACE PARA ADMINISTRADORES */}
+              
+              {/* 👇 NUEVO ENLACE PARA EL CRUD 👇 */}
+              <Link to="/crud-estacionamiento" className={isActive("/crud-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
+                <FaBuilding /> Administrar Estacionamientos
+              </Link>
+
+              {/* 👇 HISTORIAL DE OCUPACIÓN 👇 */}
               <Link to="/historial-ocupacion" className={isActive("/historial-ocupacion")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClock /> Historial Ocupación
               </Link>

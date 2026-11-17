@@ -28,6 +28,11 @@ const Admin = lazy(() => import('./components/Admin.jsx'));
 // NUEVO: Importamos la página de Finanzas
 const Finanzas = lazy(() => import('./components/Finanzas.jsx'));
 
+// NUEVO: Importamos el CRUD de Estacionamientos
+// En tu App.jsx línea 32:
+const CrudEstacionamiento = lazy(() => import('./components/crudestacionamineto.jsx'));// NOTA: Ajusta la ruta si lo guardaste en src/pages/ o si se llama distinto. 
+// Si lo guardaste en pages, usa: import('./pages/CrudEstacionamiento.jsx')
+
 // Protector de rutas
 function RutaProtegida({ children, allowedRole }) {
   const [user, setUser] = useState(null);
@@ -77,14 +82,14 @@ function App() {
             <Route path="/disponibilidad" element={<RutaProtegida allowedRole="usuario"><Disponibilidad /></RutaProtegida>} />
             <Route path="/mapa-estacionamiento/:id" element={<RutaProtegida allowedRole="usuario"><MapaEstacionamiento /></RutaProtegida>} />
 
-            {/* RUTA DE ADMIN (Limpia, sin el Dashboard) */}
+            {/* RUTAS DE ADMIN */}
             <Route path="/admin" element={<RutaProtegida allowedRole="admin"><Admin /></RutaProtegida>} />
-            
-            {/* NUEVA RUTA DE FINANZAS */}
             <Route path="/finanzas" element={<RutaProtegida allowedRole="admin"><Finanzas /></RutaProtegida>} />
-
             <Route path="/registrar-estacionamiento" element={<RutaProtegida allowedRole="admin"><RegistrarEstacionamiento /></RutaProtegida>} />
             <Route path="/historial-ocupacion" element={<RutaProtegida allowedRole="admin"><HistorialOcupacion /></RutaProtegida>} />
+            
+            {/* 👇 NUEVA RUTA DEL CRUD 👇 */}
+            <Route path="/crud-estacionamiento" element={<RutaProtegida allowedRole="admin"><CrudEstacionamiento /></RutaProtegida>} />
             
           </Route>
 
