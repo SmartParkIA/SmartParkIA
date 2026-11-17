@@ -1,11 +1,18 @@
 import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { FaBan, FaCheckCircle, FaUsers } from "react-icons/fa";
+import { FaBan, FaCheckCircle, FaUsers, FaExclamationTriangle } from "react-icons/fa";
 import { db } from "../firebase/config.js";
 
 export default function Admin() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+
+  // Función para mostrar notificaciones
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -18,6 +25,7 @@ export default function Admin() {
         setUsers(usersList);
       } catch (error) {
         console.error("Error al cargar usuarios:", error);
+        showToast("Error al cargar la lista de usuarios", "error");
       } finally {
         setLoading(false);
       }
@@ -33,9 +41,10 @@ export default function Admin() {
       setUsers((prevUsers) =>
         prevUsers.map((u) => (u.id === userId ? { ...u, rol: newRole } : u))
       );
+      showToast("Rol actualizado correctamente");
     } catch (error) {
       console.error("Error al actualizar rol:", error);
-      alert("No se pudo actualizar el rol.");
+      showToast("No se pudo actualizar el rol.", "error");
     }
   };
 
@@ -47,9 +56,10 @@ export default function Admin() {
       setUsers((prevUsers) =>
         prevUsers.map((u) => (u.id === userId ? { ...u, estado: newStatus } : u))
       );
+      showToast(`Usuario ${newStatus ? "activado" : "bloqueado"} correctamente`);
     } catch (error) {
       console.error("Error al cambiar estado:", error);
-      alert("No se pudo actualizar el estado.");
+      showToast("No se pudo actualizar el estado.", "error");
     }
   };
 
@@ -59,8 +69,15 @@ export default function Admin() {
       <div className="bg-grid"></div>
       <div className="bg-glow-bottom"></div>
 
+      {/* TOAST NOTIFICACIÓN */}
+      {toast && (
+        <div className={`admin-toast ${toast.type}`}>
+          {toast.type === "error" ? <FaExclamationTriangle /> : <FaCheckCircle />}
+          {toast.msg}
+        </div>
+      )}
+
       <div className="admin-content">
-        
         {/* HEADER ESTILO FINANZAS */}
         <div className="admin-header">
           <div className="header-icon-box">
@@ -74,7 +91,7 @@ export default function Admin() {
         
         {/* TABLA TIPO PANEL DE CRISTAL */}
         <div className="table-container">
-          <table>
+          <table className="admin-table">
             <thead>
               <tr>
                 <th>Usuario / Correo</th>
@@ -106,13 +123,13 @@ export default function Admin() {
                       className="animated-row"
                       style={{ animationDelay: `${index * 0.05}s` }}
                     >
-                      <td>
+                      <td data-label="Usuario">
                         <div className="user-email">
                           <span className="email-dot"></span>
                           {user.correo || user.email || "Sin correo"}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Rol">
                         <select
                           className="role-select"
                           value={user.rol || "usuario"}
@@ -122,13 +139,13 @@ export default function Admin() {
                           <option value="admin">🛡️ Administrador</option>
                         </select>
                       </td>
-                      <td>
+                      <td data-label="Estado">
                         <span className={`status-badge ${estaActivo ? "active" : "blocked"}`}>
                           {estaActivo ? <FaCheckCircle /> : <FaBan />}
                           {estaActivo ? "Activo" : "Bloqueado"}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Acciones">
                         <button
                           className={`action-btn ${estaActivo ? "btn-danger" : "btn-success"}`}
                           onClick={() => handleStatusToggle(user.id, estaActivo)}
@@ -233,11 +250,10 @@ export default function Admin() {
           animation: fadeIn 0.6s ease;
         }
 
-        table {
+        .admin-table {
           width: 100%;
           border-collapse: collapse;
           text-align: left;
-          min-width: 800px;
         }
 
         th {
@@ -284,6 +300,7 @@ export default function Admin() {
           background: #00f2fe;
           border-radius: 50%;
           box-shadow: 0 0 8px #00f2fe;
+          flex-shrink: 0;
         }
 
         /* Select estilizado */
@@ -388,18 +405,112 @@ export default function Admin() {
           margin-right: 8px;
         }
 
+        /* TOAST NOTIFICACIÓN */
+        .admin-toast {
+          position: fixed;
+          bottom: 30px;
+          right: 30px;
+          padding: 14px 24px;
+          border-radius: 12px;
+          color: #fff;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+          z-index: 3000;
+          font-weight: 600;
+          font-size: 14px;
+          animation: slideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .admin-toast.success { background: linear-gradient(135deg, #10b981, #059669); }
+        .admin-toast.error { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-
         @keyframes slideInRow {
           from { opacity: 0; transform: translateX(-10px); }
           to { opacity: 1; transform: translateX(0); }
         }
-
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+
+        /* =========================================
+           RESPONSIVO (Para celulares)
+           ========================================= */
+        @media (max-width: 768px) {
+          .admin-container { padding: 20px 15px; }
+          .admin-header { flex-direction: column; text-align: center; gap: 10px; }
+          .admin-header h2 { font-size: 22px; }
+          
+          /* Ocultar cabecera de la tabla */
+          .admin-table thead { display: none; }
+
+          /* Convertir tabla en bloques */
+          .admin-table, .admin-table tbody, .admin-table tr, .admin-table td {
+            display: block;
+            width: 100%;
+          }
+
+          /* Estilo de tarjeta para cada usuario */
+          .admin-table tr {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+          }
+
+          .admin-table td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+            text-align: right;
+            font-size: 14px;
+          }
+
+          .admin-table td:last-child { border-bottom: none; }
+
+          /* Etiqueta izquierda de cada dato */
+          .admin-table td::before {
+            content: attr(data-label);
+            font-weight: 700;
+            color: #00f2fe;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 15px;
+            text-align: left;
+          }
+
+          /* Destacar el correo como título */
+          .admin-table td[data-label="Usuario"] {
+            display: block;
+            text-align: left;
+            font-size: 16px;
+            border-bottom: 2px solid rgba(0, 242, 254, 0.2);
+            padding-top: 0;
+            margin-bottom: 10px;
+          }
+          .admin-table td[data-label="Usuario"]::before { display: none; }
+          
+          .user-email { font-size: 16px; font-weight: 700; color: #fff; }
+
+          /* Select y Botones ocupan más espacio */
+          .role-select { width: 100%; max-width: 180px; }
+          .action-btn { width: 100%; max-width: 120px; padding: 10px; }
+          
+          .admin-toast { bottom: 20px; right: 20px; left: 20px; justify-content: center; }
         }
       `}</style>
     </div>
