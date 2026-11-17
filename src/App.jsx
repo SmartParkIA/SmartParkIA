@@ -3,13 +3,11 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from './firebase/config.js';
-import AsistenteVirtual from './components/AsistenteVirtual';
 
 // Páginas públicas
 import Login from './components/login.jsx';
 const Registro = lazy(() => import('./components/Registro.jsx'));
 const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'));
-const Ticket = lazy(() => import('./components/Ticket.jsx'));   // 🆕 Página del QR
 
 // Layout
 import Layout from './components/layout.jsx';
@@ -24,11 +22,12 @@ const Estacionamientos = lazy(() => import('./components/Estacionamientos.jsx'))
 const MapaEstacionamiento = lazy(() => import('./components/MapaEstacionamiento.jsx'));
 const Disponibilidad = lazy(() => import('./pages/Disponibilidad.jsx'));
 const RegistrarEstacionamiento = lazy(() => import('./pages/RegistrarEstacionamiento.jsx'));
+const HistorialOcupacion = lazy(() => import('./pages/HistorialOcupacion.jsx'));
 const Admin = lazy(() => import('./components/Admin.jsx'));
 
 // NUEVO: Importamos la página de Finanzas
 const Finanzas = lazy(() => import('./components/Finanzas.jsx'));
-const descargarArchivo=lazy(()=>import("./components/descargarArchivo.jsx"))
+
 // Protector de rutas
 function RutaProtegida({ children, allowedRole }) {
   const [user, setUser] = useState(null);
@@ -65,9 +64,6 @@ function App() {
           <Route path="/registro" element={<Registro />} />
           <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
 
-          {/* 🆕 RUTA PÚBLICA DEL TICKET (QR) */}
-          <Route path="/ticket" element={<Ticket />} />
-
           {/* RUTAS PRIVADAS */}
           <Route element={<Layout />}>
             
@@ -88,6 +84,7 @@ function App() {
             <Route path="/finanzas" element={<RutaProtegida allowedRole="admin"><Finanzas /></RutaProtegida>} />
 
             <Route path="/registrar-estacionamiento" element={<RutaProtegida allowedRole="admin"><RegistrarEstacionamiento /></RutaProtegida>} />
+            <Route path="/historial-ocupacion" element={<RutaProtegida allowedRole="admin"><HistorialOcupacion /></RutaProtegida>} />
             
           </Route>
 
@@ -95,7 +92,7 @@ function App() {
         </Routes>
       </Suspense>
     </HashRouter>
-  )
+  );
 }
 
 export default App;
