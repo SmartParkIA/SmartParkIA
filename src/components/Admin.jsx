@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { FaBan, FaCheckCircle, FaUsers, FaExclamationTriangle } from "react-icons/fa";
+import { FaCheckCircle, FaUsers, FaExclamationTriangle } from "react-icons/fa";
 import { db } from "../firebase/config.js";
 
 export default function Admin() {
@@ -48,21 +48,6 @@ export default function Admin() {
     }
   };
 
-  const handleStatusToggle = async (userId, currentStatus) => {
-    try {
-      const newStatus = !currentStatus;
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, { estado: newStatus });
-      setUsers((prevUsers) =>
-        prevUsers.map((u) => (u.id === userId ? { ...u, estado: newStatus } : u))
-      );
-      showToast(`Usuario ${newStatus ? "activado" : "bloqueado"} correctamente`);
-    } catch (error) {
-      console.error("Error al cambiar estado:", error);
-      showToast("No se pudo actualizar el estado.", "error");
-    }
-  };
-
   return (
     <div className="admin-container">
       {/* FONDO ESTILO FINANZAS */}
@@ -85,7 +70,7 @@ export default function Admin() {
           </div>
           <div>
             <h2>Gestión de Usuarios</h2>
-            <p className="admin-subtitle">Administra roles y accesos del sistema en tiempo real</p>
+            <p className="admin-subtitle">Administra los roles de acceso del sistema en tiempo real</p>
           </div>
         </div>
         
@@ -96,27 +81,23 @@ export default function Admin() {
               <tr>
                 <th>Usuario / Correo</th>
                 <th>Rol de Acceso</th>
-                <th>Estado Actual</th>
-                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="empty-state">
+                  <td colSpan="2" className="empty-state">
                     <span className="spinner"></span> Sincronizando usuarios...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="empty-state">
+                  <td colSpan="2" className="empty-state">
                     No hay usuarios registrados en la base de datos.
                   </td>
                 </tr>
               ) : (
                 users.map((user, index) => {
-                  const estaActivo = user.estado === true;
-
                   return (
                     <tr 
                       key={user.id} 
@@ -138,20 +119,6 @@ export default function Admin() {
                           <option value="usuario">👤 Usuario</option>
                           <option value="admin">🛡️ Administrador</option>
                         </select>
-                      </td>
-                      <td data-label="Estado">
-                        <span className={`status-badge ${estaActivo ? "active" : "blocked"}`}>
-                          {estaActivo ? <FaCheckCircle /> : <FaBan />}
-                          {estaActivo ? "Activo" : "Bloqueado"}
-                        </span>
-                      </td>
-                      <td data-label="Acciones">
-                        <button
-                          className={`action-btn ${estaActivo ? "btn-danger" : "btn-success"}`}
-                          onClick={() => handleStatusToggle(user.id, estaActivo)}
-                        >
-                          {estaActivo ? "Bloquear" : "Activar"}
-                        </button>
                       </td>
                     </tr>
                   );
@@ -328,65 +295,6 @@ export default function Admin() {
           box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
         }
 
-        /* Badges de estado */
-        .status-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 600;
-        }
-
-        .status-badge.active {
-          background: rgba(16, 185, 129, 0.1);
-          color: #10b981;
-          border: 1px solid rgba(16, 185, 129, 0.2);
-        }
-
-        .status-badge.blocked {
-          background: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
-          border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        /* Botones estilo Finanzas */
-        .action-btn {
-          padding: 8px 16px;
-          border-radius: 8px;
-          border: 1px solid transparent;
-          font-weight: 700;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-family: inherit;
-        }
-
-        .btn-success {
-          background: rgba(16, 185, 129, 0.1);
-          color: #10b981;
-          border-color: rgba(16, 185, 129, 0.3);
-        }
-
-        .btn-success:hover {
-          background: #10b981;
-          color: #050b14;
-          box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
-        }
-
-        .btn-danger {
-          background: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
-          border-color: rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-danger:hover {
-          background: #ef4444;
-          color: #ffffff;
-          box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
-        }
-
         .empty-state {
           text-align: center;
           padding: 40px !important;
@@ -506,9 +414,8 @@ export default function Admin() {
           
           .user-email { font-size: 16px; font-weight: 700; color: #fff; }
 
-          /* Select y Botones ocupan más espacio */
+          /* Select ocupa más espacio */
           .role-select { width: 100%; max-width: 180px; }
-          .action-btn { width: 100%; max-width: 120px; padding: 10px; }
           
           .admin-toast { bottom: 20px; right: 20px; left: 20px; justify-content: center; }
         }
