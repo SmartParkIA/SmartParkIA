@@ -6,16 +6,17 @@ import {
   FaCheckCircle,
   FaEnvelope,
   FaExclamationCircle,
+  FaIdCard,
   FaSpinner,
   FaUser,
-  FaUserShield,
-  FaIdCard // Añadido para el icono del header
+  FaUserShield
 } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom"; // 👈 Importamos useLocation
 import { auth, db } from "../firebase/config.js";
 
 export default function Perfil() {
   const navigate = useNavigate();
+  const location = useLocation(); // 👈 Obtenemos la ruta
 
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -33,7 +34,15 @@ export default function Perfil() {
       setUser(u);
       try {
         const snap = await getDoc(doc(db, "users", u.uid));
-        if (snap.exists()) setUserData(snap.data());
+        if (snap.exists()) {
+          const data = snap.data();
+          // Si está bloqueado, lo sacamos al login inmediatamente
+          if (data.estado === false || String(data.estado).toLowerCase() === "false"){
+            navigate("/login", { replace: true });
+            return;
+          }
+          setUserData(data);
+        }
       } catch (err) {
         console.error("Error al obtener datos:", err);
       } finally {
@@ -41,7 +50,7 @@ export default function Perfil() {
       }
     });
     return () => unsub();
-  }, [navigate]);
+  }, [navigate, location.pathname]); // 👈 Se ejecuta al cargar y al cambiar de ruta
 
   // --- Toast interno ---
   const showToast = (msg, type = "success") => {
@@ -196,7 +205,6 @@ export default function Perfil() {
           font-family: 'Outfit', sans-serif;
         }
 
-        /* === FONDO ESTILO FINANZAS === */
         .bg-grid {
           position: absolute;
           inset: 0;
@@ -216,7 +224,6 @@ export default function Perfil() {
           pointer-events: none;
         }
 
-        /* === CONTENIDO === */
         .perfil-content {
           position: relative;
           z-index: 1;
@@ -225,7 +232,6 @@ export default function Perfil() {
           animation: fadeIn 0.5s ease;
         }
 
-        /* Header estilo Finanzas */
         .perfil-header {
           display: flex;
           align-items: center;
@@ -270,7 +276,6 @@ export default function Perfil() {
         }
         .loader p { margin-top: 14px; font-weight: 500; }
 
-        /* === TARJETA PRINCIPAL (GLASSMORPHISM) === */
         .profile-card {
           display: grid;
           grid-template-columns: 260px 1fr;
@@ -285,7 +290,6 @@ export default function Perfil() {
           animation: slideInRow 0.5s ease;
         }
 
-        /* === AVATAR === */
         .avatar-container {
           display: flex;
           flex-direction: column;
@@ -319,7 +323,7 @@ export default function Perfil() {
 
         .avatar-overlay {
           position: absolute;
-          inset: 4px; /* Para que quede dentro del borde de gradiente */
+          inset: 4px;
           border-radius: 50%;
           background: rgba(5, 11, 20, 0.8);
           color: #00f2fe;
@@ -355,7 +359,6 @@ export default function Perfil() {
           box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
         }
 
-        /* === INFORMACIÓN === */
         .info-grid {
           display: flex;
           flex-direction: column;
@@ -398,7 +401,7 @@ export default function Perfil() {
         .role-container {
           display: flex;
           align-items: center;
-          padding: 10px 20px; /* Un poco menos de padding para el badge */
+          padding: 10px 20px;
         }
 
         .role-badge {
@@ -414,7 +417,6 @@ export default function Perfil() {
           box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
         }
 
-        /* === TOAST === */
         .toast {
           position: fixed;
           bottom: 24px;
@@ -434,7 +436,6 @@ export default function Perfil() {
         .toast.success { background: #10b981; color: #050b14; border: 1px solid #10b981; }
         .toast.error { background: #ef4444; color: #fff; border: 1px solid #ef4444; }
 
-        /* === RESPONSIVE === */
         @media (max-width: 768px) {
           .profile-card {
             grid-template-columns: 1fr;

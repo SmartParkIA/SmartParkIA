@@ -1,14 +1,15 @@
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore"; // 👈 Cambiamos getDoc por onSnapshot
 import { useEffect, useState } from "react";
 import {
-  FaBars, FaCalendarAlt, FaCar,
+  FaBars,
+  FaBuilding,
+  FaCalendarAlt, FaCar,
   FaChartPie,
   FaCheckCircle, FaClipboardList,
+  FaClock,
   FaCog, FaHistory, FaMapMarkedAlt, FaParking, FaSignOutAlt,
-  FaTimes, FaUser,
-  FaClock, // Para Historial de Ocupación
-  FaBuilding // Para el CRUD de Estacionamientos
+  FaTimes, FaUser
 } from "react-icons/fa";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
@@ -24,21 +25,35 @@ export default function Layout() {
   const location = useLocation(); 
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    let unsubDoc = null;
+
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (!u) {
         navigate("/login", { replace: true });
         return;
       }
-      try {
-        const snap = await getDoc(doc(db, "users", u.uid));
-        if (snap.exists()) setUserData(snap.data());
-      } catch (err) {
-        console.error("Error al obtener rol:", err);
-      } finally {
+      
+      // 👇 Escuchamos cambios en tiempo real
+      unsubDoc = onSnapshot(doc(db, "users", u.uid), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          
+          if (data.estado === false || String(data.estado).toLowerCase() === "false")  {
+            signOut(auth);
+            navigate("/login", { replace: true });
+            return;
+          }
+          
+          setUserData(data);
+        }
         setLoading(false);
-      }
+      });
     });
-    return () => unsub();
+
+    return () => {
+      unsubAuth();
+      if (unsubDoc) unsubDoc();
+    };
   }, [navigate]);
 
   const handleLogout = async () => {
@@ -71,7 +86,6 @@ export default function Layout() {
   return (
     <div className={`layout-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
       
-      {/* ====== SIDEBAR ====== */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-container">
@@ -88,7 +102,6 @@ export default function Layout() {
             <FaUser /> Mi Perfil
           </Link>
 
-          {/* --- MENÚ PARA USUARIOS NORMALES --- */}
           {!isAdmin && (
             <>
               <Link to="/mis-vehiculos" className={isActive("/mis-vehiculos")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
@@ -112,7 +125,6 @@ export default function Layout() {
             </>
           )}
 
-          {/* --- MENÚ PARA ADMINISTRADORES --- */}
           {isAdmin && (
             <>
               <Link to="/admin" className={isActive("/admin")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
@@ -124,13 +136,9 @@ export default function Layout() {
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClipboardList /> Registrar Estacionamiento
               </Link>
-              
-              {/* 👇 NUEVO ENLACE PARA EL CRUD 👇 */}
               <Link to="/crud-estacionamiento" className={isActive("/crud-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaBuilding /> Administrar Estacionamientos
               </Link>
-
-              {/* 👇 HISTORIAL DE OCUPACIÓN 👇 */}
               <Link to="/historial-ocupacion" className={isActive("/historial-ocupacion")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClock /> Historial Ocupación
               </Link>
@@ -154,10 +162,8 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Overlay para móviles */}
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
-      {/* ====== CONTENIDO PRINCIPAL ====== */}
       <div className="main-content">
         <header className="navbar">
           <div className="navbar-left">
@@ -189,7 +195,6 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* ====== ASISTENTE VIRTUAL (SOLO PARA USUARIOS) ====== */}
       {!isAdmin && <AsistenteVirtual />}
 
     </div>

@@ -1,18 +1,14 @@
-import { Suspense, lazy, useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from './firebase/config.js';
+import { doc, onSnapshot } from "firebase/firestore"; 
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { auth, db } from './firebase/config.js'; 
 
-// Páginas públicas
 import Login from './components/login.jsx';
 const Registro = lazy(() => import('./components/Registro.jsx'));
 const RecuperarContrasena = lazy(() => import('./components/RecuperarContrasena.jsx'));
-
-// Layout
 import Layout from './components/layout.jsx';
 
-// Páginas privadas
 const Perfil = lazy(() => import('./components/Perfil.jsx')); 
 const VehiculoForm = lazy(() => import('./components/VehiculoForm.jsx')); 
 const Reservas = lazy(() => import('./components/Reservas.jsx'));
@@ -24,35 +20,45 @@ const Disponibilidad = lazy(() => import('./pages/Disponibilidad.jsx'));
 const RegistrarEstacionamiento = lazy(() => import('./pages/RegistrarEstacionamiento.jsx'));
 const HistorialOcupacion = lazy(() => import('./pages/HistorialOcupacion.jsx'));
 const Admin = lazy(() => import('./components/Admin.jsx'));
-
-// NUEVO: Importamos la página de Finanzas
 const Finanzas = lazy(() => import('./components/Finanzas.jsx'));
+const CrudEstacionamiento = lazy(() => import('./components/crudestacionamineto.jsx'));
 
-// NUEVO: Importamos el CRUD de Estacionamientos
-// En tu App.jsx línea 32:
-const CrudEstacionamiento = lazy(() => import('./components/crudestacionamineto.jsx'));// NOTA: Ajusta la ruta si lo guardaste en src/pages/ o si se llama distinto. 
-// Si lo guardaste en pages, usa: import('./pages/CrudEstacionamiento.jsx')
-
-// Protector de rutas
 function RutaProtegida({ children, allowedRole }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubDoc = null;
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        const snap = await getDoc(doc(db, "users", currentUser.uid));
-        if (snap.exists()) setUserData(snap.data());
+        unsubDoc = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            setUserData(docSnap.data());
+          }
+          setLoading(false);
+        });
+      } else {
+        setUserData(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsub();
+
+    return () => {
+      unsubAuth();
+      if (unsubDoc) unsubDoc();
+    };
   }, []);
 
   if (loading) return <div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>Verificando...</div>;
   if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
+  
+  // Validación dual (por si Firebase devuelve string)
+  if (userData?.estado === false || String(userData?.estado).toLowerCase() === "false") {
+    return <Navigate to="/login" replace />;
+  }
+
   if (allowedRole && userData?.rol !== allowedRole) return <Navigate to="/perfil" replace />;
   
   return children;
@@ -63,18 +69,15 @@ function App() {
     <HashRouter>
       <Suspense fallback={<div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>Cargando...</div>}>
         <Routes>
-          {/* RUTAS PÚBLICAS */}
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Registro />} />
           <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
 
-          {/* RUTAS PRIVADAS */}
           <Route element={<Layout />}>
-            
             <Route path="/perfil" element={<RutaProtegida><Perfil /></RutaProtegida>} />
-            <Route path="/mis-vehiculos" element={<RutaProtegida allowedRole="usuario"><VehiculoForm /></RutaProtegida>} />
             
+            <Route path="/mis-vehiculos" element={<RutaProtegida allowedRole="usuario"><VehiculoForm /></RutaProtegida>} />
             <Route path="/reservar" element={<RutaProtegida allowedRole="usuario"><Reservas /></RutaProtegida>} />
             <Route path="/reservas" element={<RutaProtegida allowedRole="usuario"><VerReserva /></RutaProtegida>} />
             <Route path="/historial" element={<RutaProtegida allowedRole="usuario"><Historial /></RutaProtegida>} />
@@ -82,15 +85,11 @@ function App() {
             <Route path="/disponibilidad" element={<RutaProtegida allowedRole="usuario"><Disponibilidad /></RutaProtegida>} />
             <Route path="/mapa-estacionamiento/:id" element={<RutaProtegida allowedRole="usuario"><MapaEstacionamiento /></RutaProtegida>} />
 
-            {/* RUTAS DE ADMIN */}
             <Route path="/admin" element={<RutaProtegida allowedRole="admin"><Admin /></RutaProtegida>} />
             <Route path="/finanzas" element={<RutaProtegida allowedRole="admin"><Finanzas /></RutaProtegida>} />
             <Route path="/registrar-estacionamiento" element={<RutaProtegida allowedRole="admin"><RegistrarEstacionamiento /></RutaProtegida>} />
             <Route path="/historial-ocupacion" element={<RutaProtegida allowedRole="admin"><HistorialOcupacion /></RutaProtegida>} />
-            
-            {/* 👇 NUEVA RUTA DEL CRUD 👇 */}
             <Route path="/crud-estacionamiento" element={<RutaProtegida allowedRole="admin"><CrudEstacionamiento /></RutaProtegida>} />
-            
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
