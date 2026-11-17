@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection, query, where, getDocs, doc, updateDoc,
-  addDoc, serverTimestamp, Timestamp,        
+  addDoc, serverTimestamp, Timestamp,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config.js";
 import { QRCodeSVG } from "qrcode.react";
@@ -22,7 +22,7 @@ export default function VerReservas() {
   const navigate = useNavigate();
   const location = useLocation();
   const [initialHandled, setInitialHandled] = useState(false);
-  
+
   const [user, setUser] = useState(null);
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,10 +33,10 @@ export default function VerReservas() {
 
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [reservaQR, setReservaQR] = useState(null);
-  const [qrActual, setQrActual] = useState(null);      
-  const [creandoQR, setCreandoQR] = useState(false);   
+  const [qrActual, setQrActual] = useState(null);
+  const [creandoQR, setCreandoQR] = useState(false);
 
-  const [reservaDetalle, setReservaDetalle] = useState(null); 
+  const [reservaDetalle, setReservaDetalle] = useState(null);
 
   const [cancelando, setCancelando] = useState(false);
   const [toast, setToast] = useState(null);
@@ -44,6 +44,107 @@ export default function VerReservas() {
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
+  };
+
+  /* =====================================================
+     🔧 FIX: Helpers de seguridad
+     ===================================================== */
+
+  // Convierte Timestamp / Date / string / number a milisegundos
+  const toMs = (v) => {
+    if (!v) return 0;
+    if (typeof v?.toDate === "function") return v.toDate().getTime();
+    if (v instanceof Date) return v.getTime();
+    if (typeof v === "number") return v;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  };
+
+  // 🔧 Devuelve SIEMPRE un string renderizable en JSX
+  const safeStr = (v, fallback = "—") => {
+    if (v === null || v === undefined || v === "") return fallback;
+    if (typeof v === "string") return v;
+    if (typeof v === "number" || typeof v === "boolean") return String(v);
+    if (typeof v?.toDate === "function") {
+      try {
+        return v.toDate().toLocaleString("es-MX");
+      } catch {
+        return fallback;
+      }
+    }
+    if (v instanceof Date) {
+      try {
+        return v.toLocaleString("es-MX");
+      } catch {
+        return fallback;
+      }
+    }
+    // Cualquier otra cosa (objetos, arrays) → fallback
+    return fallback;
+  };
+
+  // 🔧 Sanitiza una reserva completa antes de pasarla a hijos/JSX
+  const sanitizeReserva = (r) => {
+    if (!r || typeof r !== "object") return null;
+    return {
+      ...r,
+      id: r.id,
+      fecha: safeStr(r.fecha, ""),
+      horario: safeStr(r.horario, ""),
+      espacio: safeStr(r.espacio, ""),
+      estacionamiento: safeStr(r.estacionamiento, ""),
+      marca: safeStr(r.marca, ""),
+      modelo: safeStr(r.modelo, ""),
+      placa: safeStr(r.placa, ""),
+      duracion: safeStr(r.duracion, ""),
+      estado: safeStr(r.estado, ""),
+      costoTotal: Number(r.costoTotal) || 0,
+    };
+  };
+
+  // Combina fecha + horario en un Date válido
+  const parseReservaDate = (r) => {
+    try {
+      let base = null;
+
+      if (r.fecha && typeof r.fecha.toDate === "function") {
+        base = r.fecha.toDate();
+      } else if (r.fecha instanceof Date) {
+        base = new Date(r.fecha.getTime());
+      } else {
+        const fechaStr = safeStr(r.fecha, "");
+        const horarioStr = safeStr(r.horario, "");
+
+        if (fechaStr && horarioStr) {
+          const d = new Date(`${fechaStr}T${horarioStr}`);
+          if (!isNaN(d.getTime())) return d;
+        }
+
+        if (fechaStr) {
+          const d = new Date(fechaStr);
+          if (!isNaN(d.getTime())) base = d;
+        }
+
+        if (!base) {
+          const m = fechaStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+          if (m) {
+            const [, dd, mm, yy] = m;
+            const year =
+              yy.length === 2 ? 2000 + parseInt(yy, 10) : parseInt(yy, 10);
+            base = new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10));
+          }
+        }
+      }
+
+      if (base && r.horario) {
+        const tm = safeStr(r.horario, "").match(/(\d{1,2}):(\d{2})/);
+        if (tm) base.setHours(parseInt(tm[1], 10), parseInt(tm[2], 10), 0, 0);
+      }
+
+      return base;
+    } catch {
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -59,62 +160,68 @@ export default function VerReservas() {
     return () => unsub();
   }, [navigate]);
 
-  // 🆕 Abrir automáticamente el modal de la reserva recién creada
+  /* =====================================================
+     🔧 FIX: Sanitizar la reserva nueva del state
+     ===================================================== */
   useEffect(() => {
     if (initialHandled || loading) return;
     const nueva = location.state?.nuevaReserva;
     if (!nueva) return;
-    
-    // Buscamos la reserva completa en la base de datos
+
     const found = reservas.find((r) => r.id === nueva.id);
-    
+
     if (found) {
-      setReservaDetalle(found);
+      setReservaDetalle(sanitizeReserva(found));
     } else {
-      // 🛠️ SOLUCIÓN AL ERROR #31: Aseguramos que todos los campos sean strings
-      setReservaDetalle({
-        ...nueva,
-        fecha: String(nueva.fecha || ""),
-        horario: String(nueva.horario || ""),
-        espacio: String(nueva.espacio || ""),
-        estacionamiento: String(nueva.estacionamiento || ""),
-        marca: String(nueva.marca || ""),
-        modelo: String(nueva.modelo || ""),
-        placa: String(nueva.placa || ""),
-        duracion: String(nueva.duracion || ""),
-        costoTotal: Number(nueva.costoTotal || 0),
-      });
+      setReservaDetalle(sanitizeReserva(nueva));
     }
-    
+
     setInitialHandled(true);
     navigate(location.pathname, { replace: true, state: {} });
   }, [reservas, loading, location.state, initialHandled, navigate, location.pathname]);
 
+  /* =====================================================
+     🔧 FIX: orden con toMs (tolera Timestamp de Firestore)
+     ===================================================== */
   const cargarReservas = async (uid) => {
     try {
       const q = query(collection(db, "reservas"), where("uid", "==", uid));
       const snap = await getDocs(q);
       const data = [];
       snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
-      data.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
+
+      data.sort((a, b) => toMs(b.fechaCreacion) - toMs(a.fechaCreacion));
       setReservas(data);
     } catch (err) {
-      console.error(err);
-      showToast("Error al cargar las reservas", "error");
+      console.error("Error cargando reservas:", err);
+      showToast(`Error al cargar: ${err.code || err.message}`, "error");
     }
   };
 
+  /* =====================================================
+     🔧 FIX: clasificar permisivo
+     ===================================================== */
   const clasificar = (r) => {
-    const estado = (r.estado || "").toLowerCase();
-    if (estado === "cancelada") return "cancelada";
-    if (estado === "activa") {
-      const inicio = new Date(`${r.fecha}T${r.horario}`);
-      const dur = parseInt(r.duracion, 10) || 0;
+    const estado = safeStr(r.estado, "").toLowerCase().trim();
+
+    if (
+      [
+        "cancelada", "cancelado",
+        "expirada", "expirado",
+        "vencida", "vencido",
+      ].includes(estado)
+    ) {
+      return "cancelada";
+    }
+
+    const inicio = parseReservaDate(r);
+    if (inicio) {
+      const dur = parseFloat(r.duracion) || 0;
       const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
       if (fin < new Date()) return "pasada";
-      return "activa";
     }
-    return "otra";
+
+    return "activa";
   };
 
   const reservasActivas = useMemo(() => {
@@ -124,10 +231,10 @@ export default function VerReservas() {
         const q = busqueda.trim().toLowerCase();
         return (
           !q ||
-          (r.espacio || "").toLowerCase().includes(q) ||
-          (r.estacionamiento || "").toLowerCase().includes(q) ||
-          (r.placa || "").toLowerCase().includes(q) ||
-          (r.marca || "").toLowerCase().includes(q)
+          safeStr(r.espacio, "").toLowerCase().includes(q) ||
+          safeStr(r.estacionamiento, "").toLowerCase().includes(q) ||
+          safeStr(r.placa, "").toLowerCase().includes(q) ||
+          safeStr(r.marca, "").toLowerCase().includes(q)
         );
       });
   }, [reservas, busqueda]);
@@ -138,10 +245,14 @@ export default function VerReservas() {
   );
 
   const abrirModalCancelar = (r) => {
-    setReservaACancelar(r);
+    // 🔧 Sanitizamos antes de abrir el modal
+    setReservaACancelar(sanitizeReserva(r));
     setModalOpen(true);
   };
 
+  /* =====================================================
+     🔧 FIX: mostrar error real de Firestore al cancelar
+     ===================================================== */
   const confirmarCancelacion = async () => {
     if (!reservaACancelar) return;
     setCancelando(true);
@@ -158,19 +269,24 @@ export default function VerReservas() {
       setModalOpen(false);
       setReservaACancelar(null);
     } catch (err) {
-      console.error(err);
-      showToast("No se pudo cancelar la reserva.", "error");
+      console.error("Error cancelando:", err);
+      showToast(
+        `No se pudo cancelar (${err.code || "error"}): ${
+          err.message || "revisa reglas de Firestore"
+        }`,
+        "error"
+      );
     } finally {
       setCancelando(false);
     }
   };
 
   /* ============================
-     🆕 Generar o reutilizar QR
+     Generar o reutilizar QR
      ============================ */
   const crearNuevoQR = async (r) => {
     const ahora = new Date();
-    const expira = new Date(ahora.getTime() + 60 * 60 * 1000); // 1 hora
+    const expira = new Date(ahora.getTime() + 60 * 60 * 1000);
 
     const nuevoQR = {
       uid: user.uid,
@@ -191,13 +307,13 @@ export default function VerReservas() {
   };
 
   const abrirModalQR = async (r) => {
-    setReservaQR(r);
+    // 🔧 Sanitizamos la reserva antes de guardarla para el modal
+    setReservaQR(sanitizeReserva(r));
     setQrModalOpen(true);
     setQrActual(null);
     setCreandoQR(true);
 
     try {
-      // 🔍 Buscar QR activo o escaneado existente
       const q = query(
         collection(db, "codigos_qr"),
         where("reservaId", "==", r.id),
@@ -210,7 +326,6 @@ export default function VerReservas() {
         const docSnap = snap.docs[0];
         const data = { id: docSnap.id, ...docSnap.data() };
 
-        // Verificar expiración
         if (data.estado === "activo") {
           const expira =
             data.expiraEn?.toDate?.() || new Date(data.expiraEn);
@@ -243,7 +358,7 @@ export default function VerReservas() {
   };
 
   /* =====================================================
-     🎯 TILT 3D siguiendo el cursor
+     TILT 3D
      ===================================================== */
   const handleTilt = (e) => {
     const el = e.currentTarget;
@@ -262,132 +377,136 @@ export default function VerReservas() {
     e.currentTarget.style.transform = "";
   };
 
-  const renderCard = (r, i) => (
-    <div
-      key={r.id}
-      className="reserva-item activa"
-      style={{ animationDelay: `${i * 90}ms` }}
-      onMouseMove={handleTilt}
-      onMouseLeave={handleTiltLeave}
-    >
-      {/* Aro pulsante superior */}
-      <span className="card-top-glow"></span>
-      {/* Brillo que sigue el cursor */}
-      <span className="card-spotlight"></span>
-      {/* Carretera animada inferior */}
-      <span className="card-road"></span>
+  /* =====================================================
+     🔧 FIX: renderCard sanitiza todo antes de renderizar
+     ===================================================== */
+  const renderCard = (r, i) => {
+    const s = sanitizeReserva(r);
 
-      <div className="card-header">
-        <div className="badge activa">
-          <span className="badge-ring"></span>
-          <FaCheckCircle className="badge-icon" />
-          ACTIVA
-        </div>
-        <span className="fecha-creacion">
-          <FaCalendarAlt />
-          {r.fechaCreacion
-            ? new Date(r.fechaCreacion).toLocaleDateString("es-MX", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "—"}
-        </span>
-      </div>
+    return (
+      <div
+        key={s.id}
+        className="reserva-item activa"
+        style={{ animationDelay: `${i * 90}ms` }}
+        onMouseMove={handleTilt}
+        onMouseLeave={handleTiltLeave}
+      >
+        <span className="card-top-glow"></span>
+        <span className="card-spotlight"></span>
+        <span className="card-road"></span>
 
-      <div className="cajon-hero">
-        <div className="cajon-icon">
-          <FaParking />
-          <span className="cajon-icon-ping"></span>
+        <div className="card-header">
+          <div className="badge activa">
+            <span className="badge-ring"></span>
+            <FaCheckCircle className="badge-icon" />
+            ACTIVA
+          </div>
+          <span className="fecha-creacion">
+            <FaCalendarAlt />
+            {r.fechaCreacion
+              ? new Date(toMs(r.fechaCreacion)).toLocaleDateString("es-MX", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "—"}
+          </span>
         </div>
-        <div>
-          <span className="cajon-label">Cajón</span>
-          <h3 className="cajon-value">{r.espacio || "—"}</h3>
-          <p className="cajon-place">
-            <FaMapMarkedAlt /> {r.estacionamiento || "—"}
-          </p>
-        </div>
-        <span className="cajon-shine"></span>
-      </div>
 
-      <div className="data-grid">
-        <div className="data-item" style={{ animationDelay: `${i * 90 + 120}ms` }}>
-          <FaCalendarAlt />
-          <div>
-            <span>Fecha</span>
-            <p>{String(r.fecha) || "—"}</p>
+        <div className="cajon-hero">
+          <div className="cajon-icon">
+            <FaParking />
+            <span className="cajon-icon-ping"></span>
           </div>
-        </div>
-        <div className="data-item" style={{ animationDelay: `${i * 90 + 160}ms` }}>
-          <FaClock />
           <div>
-            <span>Hora</span>
-            <p>{String(r.horario) || "—"}</p>
+            <span className="cajon-label">Cajón</span>
+            <h3 className="cajon-value">{s.espacio || "—"}</h3>
+            <p className="cajon-place">
+              <FaMapMarkedAlt /> {s.estacionamiento || "—"}
+            </p>
           </div>
+          <span className="cajon-shine"></span>
         </div>
-        <div className="data-item" style={{ animationDelay: `${i * 90 + 200}ms` }}>
-          <FaHourglassHalf />
-          <div>
-            <span>Duración</span>
-            <p>{String(r.duracion) || "—"}</p>
-          </div>
-        </div>
-        {r.placa && (
-          <div className="data-item" style={{ animationDelay: `${i * 90 + 240}ms` }}>
-            <FaCar />
+
+        <div className="data-grid">
+          <div className="data-item" style={{ animationDelay: `${i * 90 + 120}ms` }}>
+            <FaCalendarAlt />
             <div>
-              <span>Placa</span>
-              <p className="placa">{String(r.placa)}</p>
+              <span>Fecha</span>
+              <p>{s.fecha || "—"}</p>
             </div>
+          </div>
+          <div className="data-item" style={{ animationDelay: `${i * 90 + 160}ms` }}>
+            <FaClock />
+            <div>
+              <span>Hora</span>
+              <p>{s.horario || "—"}</p>
+            </div>
+          </div>
+          <div className="data-item" style={{ animationDelay: `${i * 90 + 200}ms` }}>
+            <FaHourglassHalf />
+            <div>
+              <span>Duración</span>
+              <p>{s.duracion || "—"}</p>
+            </div>
+          </div>
+          {s.placa && (
+            <div className="data-item" style={{ animationDelay: `${i * 90 + 240}ms` }}>
+              <FaCar />
+              <div>
+                <span>Placa</span>
+                <p className="placa">{s.placa}</p>
+              </div>
+            </div>
+          )}
+
+          <div
+            className="data-item data-item--money"
+            style={{ animationDelay: `${i * 90 + 280}ms` }}
+          >
+            <div className="money-icon">
+              <FaMoneyBillWave />
+              <span className="money-spark"></span>
+            </div>
+            <div>
+              <span style={{ color: "#00f2fe" }}>Costo Total</span>
+              <p className="money-value">${s.costoTotal} MXN</p>
+            </div>
+          </div>
+        </div>
+
+        {(s.marca || s.modelo) && (
+          <div className="vehiculo-row">
+            <FaCar />
+            <span>
+              {s.marca}
+              {s.modelo && ` · ${s.modelo}`}
+            </span>
           </div>
         )}
 
-        <div
-          className="data-item data-item--money"
-          style={{ animationDelay: `${i * 90 + 280}ms` }}
+        <button
+          className="btn-route"
+          onClick={() => setReservaDetalle(sanitizeReserva(r))}
+          title="Ver ruta en el mapa"
         >
-          <div className="money-icon">
-            <FaMoneyBillWave />
-            <span className="money-spark"></span>
-          </div>
-          <div>
-            <span style={{ color: "#00f2fe" }}>Costo Total</span>
-            <p className="money-value">${r.costoTotal || 0} MXN</p>
-          </div>
+          <FaRoute className="btn-route-icon" />
+          <span>Cómo llegar</span>
+          <FaLocationArrow className="btn-route-arrow" />
+          <span className="btn-route-shimmer"></span>
+        </button>
+
+        <div className="card-actions">
+          <button className="btn-qr" onClick={() => abrirModalQR(r)}>
+            <FaQrcode /> Ver QR
+          </button>
+          <button className="btn-cancelar" onClick={() => abrirModalCancelar(r)}>
+            <FaTrash /> Cancelar
+          </button>
         </div>
       </div>
-
-      {(r.marca || r.modelo) && (
-        <div className="vehiculo-row">
-          <FaCar />
-          <span>
-            {String(r.marca)} {r.modelo && `· ${String(r.modelo)}`}
-          </span>
-        </div>
-      )}
-
-      {/* 🆕 Botón Cómo llegar (arriba, ancho completo) */}
-      <button
-        className="btn-route"
-        onClick={() => setReservaDetalle(r)}
-        title="Ver ruta en el mapa"
-      >
-        <FaRoute className="btn-route-icon" />
-        <span>Cómo llegar</span>
-        <FaLocationArrow className="btn-route-arrow" />
-        <span className="btn-route-shimmer"></span>
-      </button>
-
-      <div className="card-actions">
-        <button className="btn-qr" onClick={() => abrirModalQR(r)}>
-          <FaQrcode /> Ver QR
-        </button>
-        <button className="btn-cancelar" onClick={() => abrirModalCancelar(r)}>
-          <FaTrash /> Cancelar
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -405,7 +524,6 @@ export default function VerReservas() {
 
   return (
     <div className="vr-page">
-      {/* Fondo decorativo */}
       <div className="bg-deco">
         <span className="deco-particle p1"></span>
         <span className="deco-particle p2"></span>
@@ -523,7 +641,6 @@ export default function VerReservas() {
               Escanéalo con la cámara de tu celular.
             </p>
 
-            {/* Estado del QR */}
             {qrActual && (
               <div
                 style={{
@@ -656,11 +773,11 @@ export default function VerReservas() {
               </p>
               <p style={{ margin: "0 0 3px", color: "#e2e8f0" }}>
                 <FaParking style={{ color: "#00f2fe", marginRight: 6 }} />
-                Cajón: {reservaQR.espacio}
+                Cajón: {reservaQR.espacio || "—"}
               </p>
               <p style={{ margin: "0 0 3px", color: "#e2e8f0" }}>
                 <FaCar style={{ color: "#00f2fe", marginRight: 6 }} />
-                Placa: {reservaQR.placa}
+                Placa: {reservaQR.placa || "—"}
               </p>
               <p
                 style={{
@@ -670,7 +787,7 @@ export default function VerReservas() {
                 }}
               >
                 <FaMoneyBillWave style={{ marginRight: 6 }} />
-                Total Pagado: ${reservaQR.costoTotal || 0} MXN
+                Total Pagado: ${reservaQR.costoTotal} MXN
               </p>
             </div>
 
@@ -689,7 +806,7 @@ export default function VerReservas() {
           </div>
         </div>
       )}
-     
+
       {/* ============ MODAL CANCELAR ============ */}
       {modalOpen && reservaACancelar && (
         <div
@@ -703,9 +820,10 @@ export default function VerReservas() {
             </div>
             <h3>¿Cancelar Reserva?</h3>
             <p>
-              Vas a liberar el cajón <strong>{reservaACancelar.espacio}</strong> del{" "}
-              {reservaACancelar.fecha} a las {reservaACancelar.horario}. Otra
-              persona podría ocuparlo.
+              Vas a liberar el cajón{" "}
+              <strong>{reservaACancelar.espacio || "—"}</strong> del{" "}
+              {reservaACancelar.fecha || "—"} a las{" "}
+              {reservaACancelar.horario || "—"}. Otra persona podría ocuparlo.
             </p>
             <div className="modal-buttons">
               <button
@@ -735,7 +853,7 @@ export default function VerReservas() {
         </div>
       )}
 
-      {/* ============ 🆕 MODAL DETALLE / RUTA ============ */}
+      {/* ============ MODAL DETALLE / RUTA ============ */}
       {reservaDetalle && (
         <DetalleReserva
           reserva={reservaDetalle}
@@ -754,8 +872,8 @@ export default function VerReservas() {
       )}
 
       {/* ============ ESTILOS ============ */}
+     
       <style>{`
-        /* ... TUS ESTILOS ORIGINALES SE MANTIENEN INTACTOS ... */
         @keyframes fadeIn       { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeInUp     { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes spin         { to { transform: rotate(360deg); } }

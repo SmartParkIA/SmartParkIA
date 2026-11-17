@@ -1,15 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
 import {
-  doc, getDoc, collection, query, where, getDocs,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
 } from "firebase/firestore";
-import { db } from "../firebase/config.js";
+import { useEffect, useMemo, useState } from "react";
 import {
-  FaArrowLeft, FaBuilding, FaCar, FaMapMarkerAlt, FaClock,
-  FaCheckCircle, FaTimesCircle, FaSpinner, FaLayerGroup,
-  FaParking, FaLock, FaInfoCircle, FaPhone, FaCalendarAlt,
-  FaHourglassHalf
+  FaArrowLeft,
+  FaBuilding,
+  FaCalendarAlt,
+  FaCar,
+  FaCheckCircle,
+  FaClock,
+  FaHourglassHalf,
+  FaInfoCircle,
+  FaLayerGroup,
+  FaLock,
+  FaMapMarkerAlt,
+  FaPhone,
+  FaSpinner,
+  FaTimesCircle,
 } from "react-icons/fa";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { auth, db } from "../firebase/config.js";
 
 export default function MapaEstacionamiento() {
   const { id } = useParams();
@@ -17,11 +33,11 @@ export default function MapaEstacionamiento() {
 
   const [estacionamiento, setEstacionamiento] = useState(null);
   const [todasLasReservas, setTodasLasReservas] = useState([]);
+  const [reservasUsuarioActivas, setReservasUsuarioActivas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pisoActual, setPisoActual] = useState(0);
   const [toast, setToast] = useState(null);
 
-  // 🔥 NUEVOS ESTADOS: Fecha, Hora y Duración para filtrar disponibilidad
   const [fechaFiltro, setFechaFiltro] = useState(() => {
     const hoy = new Date();
     hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset());
@@ -29,15 +45,69 @@ export default function MapaEstacionamiento() {
   });
   const [horarioFiltro, setHorarioFiltro] = useState("10:00");
   const [duracionFiltro, setDuracionFiltro] = useState(2);
+  const MAX_RESERVAS = 3;
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3200);
   };
 
-  // --- Cargar estacionamiento + TODAS las reservas activas ---
+  /* =====================================================
+     🔧 FIX: Helpers para validar si la reserva sigue vigente
+     ===================================================== */
+  const parseReservaDate = (r) => {
+    try {
+      let base = null;
+      if (r.fecha && typeof r.fecha.toDate === "function") {
+        base = r.fecha.toDate();
+      } else if (r.fecha instanceof Date) {
+        base = new Date(r.fecha.getTime());
+      } else {
+        const fechaStr = String(r.fecha ?? "").trim();
+        const horarioStr = String(r.horario ?? "").trim();
+        if (fechaStr && horarioStr) {
+          const d = new Date(`${fechaStr}T${horarioStr}`);
+          if (!isNaN(d.getTime())) return d;
+        }
+        if (fechaStr) {
+          const d = new Date(fechaStr);
+          if (!isNaN(d.getTime())) base = d;
+        }
+        if (!base) {
+          const m = fechaStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+          if (m) {
+            const [, dd, mm, yy] = m;
+            const year = yy.length === 2 ? 2000 + parseInt(yy, 10) : parseInt(yy, 10);
+            base = new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10));
+          }
+        }
+      }
+      if (base && r.horario) {
+        const tm = String(r.horario).match(/(\d{1,2}):(\d{2})/);
+        if (tm) base.setHours(parseInt(tm[1], 10), parseInt(tm[2], 10), 0, 0);
+      }
+      return base;
+    } catch {
+      return null;
+    }
+  };
+
+  const esReservaVigente = (r) => {
+    const estado = String(r.estado ?? "").toLowerCase().trim();
+    if (
+      ["cancelada", "cancelado", "expirada", "expirado", "vencida", "vencido", "finalizada", "finalizado"].includes(estado)
+    ) {
+      return false;
+    }
+    const inicio = parseReservaDate(r);
+    if (!inicio) return false; // Si no tiene fecha válida, NO cuenta y no bloquea
+    const dur = parseFloat(r.duracion) || 0;
+    const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
+    return fin >= new Date();
+  };
+
   useEffect(() => {
-    const cargar = async () => {
+    const cargarDatos = async () => {
       try {
         const snap = await getDoc(doc(db, "estacionamientos", id));
         if (!snap.exists()) {
@@ -47,7 +117,6 @@ export default function MapaEstacionamiento() {
         const est = { id: snap.id, ...snap.data() };
         setEstacionamiento(est);
 
-        // Traemos TODAS las reservas activas (sin importar la fecha)
         const q = query(
           collection(db, "reservas"),
           where("estacionamiento", "==", est.nombre),
@@ -55,7 +124,11 @@ export default function MapaEstacionamiento() {
         );
         const rSnap = await getDocs(q);
         const lista = [];
-        rSnap.forEach((d) => lista.push({ id: d.id, ...d.data() }));
+        rSnap.forEach((d) => {
+          const data = { id: d.id, ...d.data() };
+          // 🔧 FIX: Solo mostrar como ocupadas las que siguen vigentes
+          if (esReservaVigente(data)) lista.push(data);
+        });
         setTodasLasReservas(lista);
       } catch (err) {
         console.error(err);
@@ -63,10 +136,33 @@ export default function MapaEstacionamiento() {
         setLoading(false);
       }
     };
-    cargar();
+
+    cargarDatos();
+
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        try {
+          const qUser = query(collection(db, "reservas"), where("uid", "==", u.uid));
+          const snapUser = await getDocs(qUser);
+          const activasUser = [];
+          
+          snapUser.forEach((d) => {
+            const data = d.data();
+            // 🔧 FIX: Aquí estaba el error. Ahora usa esReservaVigente en lugar de solo mirar el estado.
+            if (esReservaVigente(data)) activasUser.push(data);
+          });
+
+          console.log("Reservas vigentes contadas en Mapa:", activasUser.length);
+          setReservasUsuarioActivas(activasUser);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+
+    return () => unsub();
   }, [id, navigate]);
 
-  // --- Generar pisos y cajones calculando choques de horario ---
   const pisos = useMemo(() => {
     if (!estacionamiento) return [];
     const capacidad = Number(estacionamiento.capacidad) || 0;
@@ -74,32 +170,33 @@ export default function MapaEstacionamiento() {
     let restantes = capacidad;
     let pisoNum = 1;
 
-    // Convertimos la fecha/hora seleccionada en un objeto Date
     const startSelected = new Date(`${fechaFiltro}T${horarioFiltro}`);
     const endSelected = new Date(startSelected.getTime() + duracionFiltro * 60 * 60 * 1000);
 
     while (restantes > 0) {
       const cant = Math.min(10, restantes);
       const spots = [];
-      
+
       for (let i = 1; i <= cant; i++) {
         const nombre = `P${pisoNum}-${String(i).padStart(2, "0")}`;
-        
-        // 🔥 LÓGICA CLAVE: Verificar si hay choque de horario en este cajón
+
         const reservaChoque = todasLasReservas.find((r) => {
           const rNombre = (r.espacio || "").toUpperCase().replace(/\s+/g, "");
           if (rNombre !== nombre.toUpperCase().replace(/\s+/g, "")) return false;
 
-          // Calcular el inicio y fin de la reserva existente
           const rStart = new Date(`${r.fecha}T${r.horario}`);
           const rDur = parseInt(r.duracion, 10) || 0;
           const rEnd = new Date(rStart.getTime() + rDur * 60 * 60 * 1000);
 
-          // Si los horarios se cruzan, hay choque
           return startSelected < rEnd && endSelected > rStart;
         });
 
-        spots.push({ nombre, ocupado: !!reservaChoque, reserva: reservaChoque });
+        spots.push({
+          nombre,
+          ocupado: false,
+          tieneReservaEnFiltro: !!reservaChoque,
+          reserva: reservaChoque,
+        });
       }
       pisosArr.push({ numero: pisoNum, spots });
       restantes -= cant;
@@ -113,18 +210,22 @@ export default function MapaEstacionamiento() {
   const stats = useMemo(() => {
     const total = pisos.reduce((acc, p) => acc + p.spots.length, 0);
     const ocupados = pisos.reduce(
-      (acc, p) => acc + p.spots.filter((s) => s.ocupado).length,
+      (acc, p) => acc + p.spots.filter((s) => s.tieneReservaEnFiltro).length,
       0
     );
     return { total, ocupados, libres: total - ocupados };
   }, [pisos]);
 
   const handleClickSpot = (spot) => {
-    if (spot.ocupado) {
-      showToast("Ese cajón ya está reservado en el horario seleccionado", "error");
+    // 🔧 FIX: Ahora esta validación ya no te bloqueará si la 3ra reserva está vencida o sin fecha.
+    if (reservasUsuarioActivas.length >= MAX_RESERVAS) {
+      showToast(
+        `Límite alcanzado: Ya tienes ${MAX_RESERVAS} reservas activas. No puedes realizar otra.`,
+        "error"
+      );
       return;
     }
-    // 🔥 Pasamos también la fecha, hora y duración a la pantalla de reserva
+
     navigate(
       `/reservar?cajon=${encodeURIComponent(spot.nombre)}&estacionamiento=${encodeURIComponent(
         estacionamiento.nombre
@@ -149,7 +250,6 @@ export default function MapaEstacionamiento() {
 
   return (
     <div className="map-page">
-      {/* Fondo animado */}
       <div className="bg-animated">
         <div className="bg-blob blob-1"></div>
         <div className="bg-blob blob-2"></div>
@@ -173,29 +273,28 @@ export default function MapaEstacionamiento() {
           </div>
         </header>
 
-        {/* 🔥 FILTROS DE BÚSQUEDA (Fecha y Hora) */}
         <div className="search-filters">
           <div className="filter-group">
             <label><FaCalendarAlt /> Fecha</label>
-            <input 
-              type="date" 
-              value={fechaFiltro} 
-              onChange={(e) => setFechaFiltro(e.target.value)} 
+            <input
+              type="date"
+              value={fechaFiltro}
+              onChange={(e) => setFechaFiltro(e.target.value)}
               min={new Date().toISOString().split("T")[0]}
             />
           </div>
           <div className="filter-group">
             <label><FaClock /> Hora de inicio</label>
-            <input 
-              type="time" 
-              value={horarioFiltro} 
-              onChange={(e) => setHorarioFiltro(e.target.value)} 
+            <input
+              type="time"
+              value={horarioFiltro}
+              onChange={(e) => setHorarioFiltro(e.target.value)}
             />
           </div>
           <div className="filter-group">
             <label><FaHourglassHalf /> Duración</label>
-            <select 
-              value={duracionFiltro} 
+            <select
+              value={duracionFiltro}
               onChange={(e) => setDuracionFiltro(Number(e.target.value))}
             >
               <option value={1}>1 Hora</option>
@@ -206,7 +305,6 @@ export default function MapaEstacionamiento() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-icon total"><FaLayerGroup /></div>
@@ -218,11 +316,10 @@ export default function MapaEstacionamiento() {
           </div>
           <div className="stat-card">
             <div className="stat-icon occ"><FaLock /></div>
-            <div><span>Ocupados</span><h3>{stats.ocupados}</h3></div>
+            <div><span>Con reservas</span><h3>{stats.ocupados}</h3></div>
           </div>
         </div>
 
-        {/* Piso selector */}
         <div className="floors-tabs">
           {pisos.map((p, i) => (
             <button
@@ -232,28 +329,22 @@ export default function MapaEstacionamiento() {
             >
               <FaLayerGroup /> Piso {p.numero}
               <span className="floor-count">
-                {p.spots.filter((s) => !s.ocupado).length}/{p.spots.length}
+                {p.spots.length}/{p.spots.length}
               </span>
             </button>
           ))}
         </div>
 
-        {/* Leyenda */}
         <div className="legend">
           <div className="legend-item">
             <div className="spot-swatch libre"></div>
-            <span>Libre</span>
-          </div>
-          <div className="legend-item">
-            <div className="spot-swatch ocupado"></div>
-            <span>Ocupado en este horario</span>
+            <span>Disponible</span>
           </div>
           <div className="legend-info">
-            <FaInfoCircle /> Haz clic en un cajón libre para reservarlo
+            <FaInfoCircle /> Haz clic en cualquier cajón para ver sus horarios disponibles y reservarlo
           </div>
         </div>
 
-        {/* Mapa del piso */}
         {piso && (
           <div className="parking-canvas" key={piso.numero}>
             <div className="canvas-header">
@@ -301,12 +392,9 @@ export default function MapaEstacionamiento() {
       )}
 
       <style>{`
-        /* ... (Tus mismos estilos de animaciones y clases) ... */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pop { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: .9; } }
         @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
         @keyframes blobMove1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(80px,-60px) scale(1.15); } }
         @keyframes blobMove2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-100px,80px) scale(1.1); } }
@@ -337,34 +425,22 @@ export default function MapaEstacionamiento() {
         .meta span { display: inline-flex; align-items: center; gap: 6px; }
         .meta svg { color: #00f2fe; font-size: 12px; }
 
-        /* 🔥 ESTILOS NUEVOS PARA LOS FILTROS */
-        .search-filters {
-          display: flex; flex-wrap: wrap; gap: 15px;
-          background: rgba(30,41,59,.75); border: 1px solid rgba(0,242,254,.2);
-          border-radius: 14px; padding: 15px 20px; margin-bottom: 20px;
-          animation: fadeInUp .5s ease;
-        }
+        .search-filters { display: flex; flex-wrap: wrap; gap: 15px; background: rgba(30,41,59,.75); border: 1px solid rgba(0,242,254,.2); border-radius: 14px; padding: 15px 20px; margin-bottom: 20px; animation: fadeInUp .5s ease; }
         .filter-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 150px; }
         .filter-group label { color: #00f2fe; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; display: flex; align-items: center; gap: 6px; }
-        .filter-group input, .filter-group select {
-          width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155;
-          border-radius: 8px; color: #fff; font-size: 14px; font-family: inherit; outline: none; transition: all .2s;
-        }
+        .filter-group input, .filter-group select { width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #fff; font-size: 14px; font-family: inherit; outline: none; transition: all .2s; }
         .filter-group input:focus, .filter-group select:focus { border-color: #00f2fe; box-shadow: 0 0 0 2px rgba(0,242,254,.15); }
 
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-        .stat-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: rgba(30,41,59,.75); border: 1px solid rgba(148,163,184,.15); border-radius: 14px; backdrop-filter: blur(10px); animation: fadeInUp .5s cubic-bezier(0.34,1.56,0.64,1) backwards; }
-        .stat-card:nth-child(1) { animation-delay: .05s; }
-        .stat-card:nth-child(2) { animation-delay: .12s; }
-        .stat-card:nth-child(3) { animation-delay: .19s; }
+        .stat-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: rgba(30,41,59,.75); border: 1px solid rgba(148,163,184,.15); border-radius: 14px; backdrop-filter: blur(10px); }
         .stat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
         .stat-icon.total { background: rgba(0,242,254,.15); color: #00f2fe; }
         .stat-icon.free { background: rgba(16,185,129,.15); color: #10b981; }
         .stat-icon.occ { background: rgba(100,116,139,.2); color: #94a3b8; }
         .stat-card span { color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
-        .stat-card h3 { color: #e2e8f0; font-size: 22px; font-weight: 800; margin: 2px 0 0; letter-spacing: -0.5px; }
+        .stat-card h3 { color: #e2e8f0; font-size: 22px; font-weight: 800; margin: 2px 0 0; }
         
-        .floors-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; animation: fadeInUp .5s ease .15s backwards; }
+        .floors-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
         .floor-tab { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: rgba(30,41,59,.6); border: 1px solid #334155; color: #94a3b8; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; font-family: inherit; }
         .floor-tab:hover { color: #00f2fe; border-color: rgba(0,242,254,.3); }
         .floor-tab.active { background: linear-gradient(135deg, #00f2fe, #4facfe); color: #0f172a; border-color: transparent; box-shadow: 0 6px 18px rgba(0,242,254,.3); }
@@ -375,11 +451,10 @@ export default function MapaEstacionamiento() {
         .legend-item { display: flex; align-items: center; gap: 8px; color: #94a3b8; }
         .spot-swatch { width: 18px; height: 18px; border-radius: 5px; }
         .spot-swatch.libre { background: rgba(0,242,254,.08); border: 2px solid #00f2fe; }
-        .spot-swatch.ocupado { background: #334155; border: 2px solid #475569; }
         .legend-info { margin-left: auto; color: #64748b; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
         .legend-info svg { color: #00f2fe; }
 
-        .parking-canvas { background: rgba(15,23,42,.85); border: 1px solid rgba(0,242,254,.15); border-radius: 20px; padding: 24px; backdrop-filter: blur(10px); box-shadow: 0 20px 50px rgba(0,0,0,.5); animation: fadeInUp .6s ease; }
+        .parking-canvas { background: rgba(15,23,42,.85); border: 1px solid rgba(0,242,254,.15); border-radius: 20px; padding: 24px; backdrop-filter: blur(10px); box-shadow: 0 20px 50px rgba(0,0,0,.5); }
         .canvas-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px dashed rgba(148,163,184,.2); }
         .canvas-title { color: #e2e8f0; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: .5px; }
         .canvas-title svg { color: #00f2fe; }
@@ -387,17 +462,11 @@ export default function MapaEstacionamiento() {
         .live-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: liveDot 2s ease-in-out infinite; }
 
         .spots-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
-        .spot { width: 90px; height: 110px; border-radius: 10px; background: rgba(0,242,254,.06); border: 2px solid #00f2fe; color: #00f2fe; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: all .25s cubic-bezier(0.34,1.56,0.64,1); font-family: inherit; position: relative; animation: spotPulse 3s ease-in-out infinite; }
-        .spot:nth-child(2n) { animation-delay: .3s; }
-        .spot:nth-child(3n) { animation-delay: .6s; }
-        .spot:nth-child(4n) { animation-delay: .9s; }
+        .spot { width: 90px; height: 110px; border-radius: 10px; background: rgba(0,242,254,.06); border: 2px solid #00f2fe; color: #00f2fe; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: all .25s ease; font-family: inherit; position: relative; animation: spotPulse 3s ease-in-out infinite; }
         .spot:hover { background: rgba(0,242,254,.2); transform: translateY(-4px) scale(1.03); box-shadow: 0 12px 24px rgba(0,242,254,.3); }
-        .spot:active { transform: translateY(-1px) scale(.98); }
         .spot-num { font-size: 13px; font-weight: 800; letter-spacing: .5px; }
         .spot-icon { font-size: 22px; opacity: .9; }
         .spot-status { font-size: 9px; text-transform: uppercase; letter-spacing: .8px; font-weight: 700; opacity: .8; }
-        .spot.ocupado { background: #334155; border-color: #475569; color: #94a3b8; cursor: not-allowed; animation: none; opacity: .85; }
-        .spot.ocupado:hover { transform: none; box-shadow: none; background: #334155; }
 
         .lane { display: flex; align-items: center; gap: 14px; margin: 12px 0; padding: 0 16px; }
         .lane-line { flex: 1; height: 2px; background: repeating-linear-gradient(to right, rgba(250,204,21,.6) 0, rgba(250,204,21,.6) 14px, transparent 14px, transparent 28px); }
@@ -406,9 +475,9 @@ export default function MapaEstacionamiento() {
         .lane-arrows span:last-child { animation-delay: .75s; }
         .lane-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #facc15; font-weight: 700; }
 
-        .toast { position: fixed; bottom: 24px; right: 24px; display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; box-shadow: 0 12px 40px rgba(0,0,0,.5); animation: toastIn .35s cubic-bezier(0.34,1.56,0.64,1); z-index: 10001; }
+        .toast { position: fixed; bottom: 24px; right: 24px; display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; box-shadow: 0 12px 40px rgba(0,0,0,.5); animation: toastIn .35s ease; z-index: 10001; }
         .toast.success { background: #10b981; color: #0f172a; }
-        .toast.error { background: #ef4444; color: #fff; animation: toastIn .35s cubic-bezier(0.34,1.56,0.64,1), shake .4s ease .35s; }
+        .toast.error { background: #ef4444; color: #fff; animation: toastIn .35s ease, shake .4s ease .35s; }
 
         @media (max-width: 700px) {
           .header-info h2 { font-size: 22px; }
@@ -431,15 +500,16 @@ export default function MapaEstacionamiento() {
 function Spot({ spot, onClick }) {
   return (
     <button
-      className={`spot ${spot.ocupado ? "ocupado" : "libre"}`}
+      type="button"
+      className="spot libre"
       onClick={onClick}
-      title={spot.ocupado ? "Ocupado en este horario" : "Reservar este cajón"}
+      title="Hacer clic para seleccionar este cajón"
     >
       <span className="spot-icon">
-        {spot.ocupado ? <FaLock /> : <FaCar />}
+        <FaCar />
       </span>
       <span className="spot-num">{spot.nombre}</span>
-      <span className="spot-status">{spot.ocupado ? "Ocupado" : "Libre"}</span>
+      <span className="spot-status">Disponible</span>
     </button>
   );
 }

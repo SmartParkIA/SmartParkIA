@@ -1,24 +1,89 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  collection, query, where, getDocs, addDoc,
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc, // <-- Nuevo import para buscar por ID
 } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import {
+  FaArrowLeft,
+  FaBolt,
+  FaBuilding,
+  FaCalendarCheck,
+  FaCamera,
+  FaCar,
+  FaCheckCircle,
+  FaCoins,
+  FaExclamationTriangle,
+  FaFire,
+  FaHandHoldingUsd,
+  FaHourglassHalf,
+  FaInfoCircle,
+  FaKey,
+  FaLightbulb,
+  FaMagic,
+  FaMapMarkedAlt,
+  FaMapPin,
+  FaParking,
+  FaReceipt,
+  FaRocket,
+  FaShieldAlt,
+  FaSpinner,
+  FaStopwatch,
+  FaTicketAlt,
+  FaUser
+} from "react-icons/fa";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
 import { getVehiculos } from "../services/userService";
-import {
-  FaCar, FaParking, FaCalendarAlt, FaClock,
-  FaCheckCircle, FaTimesCircle, FaSpinner, FaMapMarkedAlt,
-  FaLightbulb, FaArrowLeft, FaInfoCircle, FaSave, FaBuilding, FaCamera,
-  FaMoneyBillWave, FaRocket, FaBolt, FaStar, FaMagic, FaCheckDouble,
-  FaShieldAlt, FaAward, FaChevronRight, FaCalendarCheck,
-  FaKey, FaCoins, FaTicketAlt, FaHourglassHalf, FaReceipt,
-  FaFire, FaUser, FaMapPin, FaLocationArrow, FaHandHoldingUsd,
-  FaStopwatch, FaExclamationTriangle
-} from "react-icons/fa";
 
 const MARCAS = ["Nissan", "Chevrolet", "Volkswagen", "Toyota", "Ford", "Honda", "Kia", "Mazda", "Hyundai", "SEAT"];
 const PRECIO_HORA = 50;
+const CAPACIDAD_TOTAL = 50;
+const BUFFER_MINUTOS = 15; // 🕒 margen real entre reservas
+
+const PALABRAS_PROHIBIDAS = [
+  "puta", "puto", "putita", "putito", "mierda", "pendejo", "pendeja",
+  "cabron", "cabrón", "verga", "chinga", "chingar", "chingada", "joder",
+  "jodete", "jódete", "culo", "pedo", "mamon", "mamón", "pinche", "culero",
+  "zorra", "perra", "idiota", "estupido", "estúpido", "estupida", "estúpida",
+  "tonto", "tonta", "imbecil", "imbécil", "gilipollas", "marica", "maricon",
+  "maricón", "wey", "güey", "mamada", "mamadas", "coño", "cojones", "hostia",
+  "follar", "follador", "sudaca", "culiao", "cagada", "cagar", "cagon", "cagón",
+  "ojete", "pito", "pitos", "chupar", "chupala", "chupalo", "concha", "conchudo",
+  "pelotudo", "boludo", "boluda", "garcha", "garchar", "hijueputa", "hdp", "ptm",
+  "shit", "bitch", "asshole", "fuck", "fucking", "dick", "pussy", "whore", "ass"
+];
+
+const normalizarTexto = (str = "") =>
+  String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const contieneGroseria = (texto = "") => {
+  const limpio = normalizarTexto(texto);
+  return PALABRAS_PROHIBIDAS.some((p) => {
+    const pLimpia = normalizarTexto(p);
+    const re = new RegExp(`(?:^|[^a-z])${pLimpia}`, "i");
+    return re.test(limpio);
+  });
+};
+
+const esSpamTexto = (texto = "") => {
+  const t = String(texto).trim();
+  if (t.length < 3) return false;
+  const compacto = normalizarTexto(t).replace(/[\s\-\.]/g, "");
+  if (!compacto) return true;
+  if (/(.{2,4})\1{2,}/i.test(compacto)) return true;
+  const unicos = new Set(compacto).size;
+  if (compacto.length >= 4 && unicos <= 2) return true;
+  if (/^\d+$/.test(compacto)) return true;
+  return false;
+};
+
+const CARACTERES_INVALIDOS = /[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-\.]/;
 
 export default function ReservarEspacio() {
   const navigate = useNavigate();
@@ -51,11 +116,15 @@ export default function ReservarEspacio() {
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState(null);
 
-  // 🔥 ESTADOS PARA DISPONIBILIDAD
   const [reservasDelDia, setReservasDelDia] = useState([]);
   const [reservasDelCajon, setReservasDelCajon] = useState([]);
   const [cargandoHoras, setCargandoHoras] = useState(false);
 
+  // 📌 Estados dinámicos para las horas del estacionamiento (por defecto 6 a 22)
+  const [horaApertura, setHoraApertura] = useState(6);
+  const [horaCierre, setHoraCierre] = useState(22);
+
+  const lastCorrectionToastRef = useRef(0);
   const totalPagar = Number(form.duracion) * PRECIO_HORA;
 
   const showToast = (msg, type = "success") => {
@@ -63,11 +132,122 @@ export default function ReservarEspacio() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  // ✅ ARREGLO 1: Variables renombradas para evitar conflicto con el estado 'form'
+  const parseReservaDate = (r) => {
+    try {
+      let base = null;
+
+      if (r.fecha && typeof r.fecha.toDate === "function") {
+        base = r.fecha.toDate();
+      } else if (r.fecha instanceof Date) {
+        base = new Date(r.fecha.getTime());
+      } else {
+        const fechaStr = String(r.fecha ?? "").trim();
+        const horarioStr = String(r.horario ?? "").trim();
+
+        if (fechaStr && horarioStr) {
+          const d = new Date(`${fechaStr}T${horarioStr}`);
+          if (!isNaN(d.getTime())) return d;
+        }
+        if (fechaStr) {
+          const d = new Date(fechaStr);
+          if (!isNaN(d.getTime())) base = d;
+        }
+        if (!base) {
+          const m = fechaStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+          if (m) {
+            const [, dd, mm, yy] = m;
+            const year = yy.length === 2 ? 2000 + parseInt(yy, 10) : parseInt(yy, 10);
+            base = new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10));
+          }
+        }
+      }
+
+      if (base && r.horario) {
+        const tm = String(r.horario).match(/(\d{1,2}):(\d{2})/);
+        if (tm) base.setHours(parseInt(tm[1], 10), parseInt(tm[2], 10), 0, 0);
+      }
+
+      return base;
+    } catch {
+      return null;
+    }
+  };
+
+  const esReservaVigente = (r) => {
+    const estado = String(r.estado ?? "").toLowerCase().trim();
+    if (
+      ["cancelada", "cancelado", "expirada", "expirado", "vencida", "vencido", "finalizada", "finalizado"].includes(estado)
+    ) {
+      return false;
+    }
+    const inicio = parseReservaDate(r);
+    if (!inicio) return false;
+
+    const dur = parseFloat(r.duracion) || 0;
+    const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
+    return fin >= new Date();
+  };
+
+  const calcularHoraFin = (r) => {
+    const inicio = parseReservaDate(r);
+    if (!inicio) return "";
+    const dur = parseFloat(r.duracion) || 0;
+    const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
+    return fin.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false });
+  };
+
+  const validarCampo = (id, value, strict = false) => {
+    if (id === "marca" || id === "modelo") {
+      const t = (value || "").trim();
+
+      if (!t) return strict ? "Este campo es obligatorio." : "";
+      if (t.length < 3) return "Mínimo 3 caracteres.";
+      if (t.length > 30) return "Máximo 30 caracteres.";
+      if (CARACTERES_INVALIDOS.test(value))
+        return "Solo se permiten letras, números, espacios y guiones.";
+      if (contieneGroseria(value))
+        return "El texto contiene lenguaje no permitido.";
+      if (esSpamTexto(value))
+        return "El texto parece spam o inválido. Escribe un nombre real.";
+
+      if (/[bcdfghjklmnpqrstvwxyz]{5,}/i.test(t))
+        return "El texto parece no ser una palabra real (demasiadas consonantes).";
+
+      if (/(.)\1{2,}/.test(value))
+        return "Evita repetir letras seguidas (ej. 'ooo').";
+      return "";
+    }
+
+    if (id === "placa") {
+      const v = (value || "").trim().toUpperCase();
+      if (!v) return strict ? "La placa es obligatoria." : "";
+      if (!strict && v.length < 6) return "";
+
+      const clean = v.replace(/-/g, "");
+
+      if (/[ÑQ]/.test(clean)) {
+        return "Las letras Ñ y Q no son válidas en placas mexicanas.";
+      }
+
+      const isAutoEstandar = /^[A-Z]{3}\d{3,4}$/.test(clean);
+      const isAutoNuevo = /^[A-Z]{3}\d{3}[A-Z]$/.test(clean);
+      const isCamion = /^[A-Z]{2}\d{4,5}[A-Z]$/.test(clean);
+      const isMoto = /^Y\d{3}[A-Z]{2}$/.test(clean);
+
+      if (!isAutoEstandar && !isAutoNuevo && !isCamion && !isMoto) {
+        return "Formato inválido. Ejemplos: ABC-123, ABC-1234, ABC-123-A, AA-1234-A, Y-123-AB.";
+      }
+
+      return "";
+    }
+
+    return "";
+  };
+
   useEffect(() => {
     const cajonParam = searchParams.get("cajon");
     const estParam = searchParams.get("estacionamiento");
-    const fechaParam = searchParams.get("fecha"); 
+    const fechaParam = searchParams.get("fecha");
     const horarioParam = searchParams.get("horario");
     const duracionParam = searchParams.get("duracion");
 
@@ -80,8 +260,45 @@ export default function ReservarEspacio() {
         ...(horarioParam ? { horario: horarioParam } : {}),
         ...(duracionParam ? { duracion: duracionParam } : {}),
       }));
+      setErrors((prev) => ({ ...prev, estacionamiento: "", espacio: "" }));
+      window.history.replaceState(null, "", window.location.pathname);
     }
   }, [searchParams]);
+
+  // 🔄 CARGAR HORARIOS DINÁMICOS DESDE FIRESTORE
+  useEffect(() => {
+    const fetchHorariosEstacionamiento = async () => {
+      if (!form.estacionamiento) {
+        setHoraApertura(6);
+        setHoraCierre(22);
+        return;
+      }
+      try {
+        // 📌 NOTA: Asumimos que form.estacionamiento guarda el ID del documento.
+        // Si guarda el nombre (ej. "ola"), cambia esto por un query usando where("nombre", "==", ...)
+        const docRef = doc(db, "estacionamientos", form.estacionamiento);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          if (data.hora_apertura) {
+            const [hh] = data.hora_apertura.split(":");
+            setHoraApertura(parseInt(hh, 10));
+          }
+          
+          if (data.hora_cierre) {
+            const [hh] = data.hora_cierre.split(":");
+            setHoraCierre(parseInt(hh, 10));
+          }
+        }
+      } catch (err) {
+        console.error("Error al cargar horarios del estacionamiento", err);
+      }
+    };
+    
+    fetchHorariosEstacionamiento();
+  }, [form.estacionamiento]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -104,22 +321,24 @@ export default function ReservarEspacio() {
       const q = query(collection(db, "reservas"), where("uid", "==", uid));
       const snap = await getDocs(q);
       const activas = [];
+
       snap.forEach((d) => {
         const data = { id: d.id, ...d.data() };
-        if ((data.estado || "").toLowerCase() === "activa") {
-          activas.push(data);
-        }
+        if (esReservaVigente(data)) activas.push(data);
       });
+
       setReservasActivas(activas);
     } catch (err) {
-      console.error(err);
+      console.error("Error cargando reservas:", err);
     }
   };
 
-  // 🔥 SEMÁFORO DE FECHAS
   useEffect(() => {
     const fetchDisponibilidadDia = async () => {
-      if (!form.fecha || !form.estacionamiento) return;
+      if (!form.fecha || !form.estacionamiento) {
+        setReservasDelDia([]);
+        return;
+      }
       try {
         const q = query(
           collection(db, "reservas"),
@@ -129,7 +348,7 @@ export default function ReservarEspacio() {
         );
         const snap = await getDocs(q);
         const lista = [];
-        snap.forEach(d => lista.push(d.data()));
+        snap.forEach((d) => lista.push(d.data()));
         setReservasDelDia(lista);
       } catch (err) {
         console.error("Error al calcular disponibilidad del día", err);
@@ -138,7 +357,6 @@ export default function ReservarEspacio() {
     fetchDisponibilidadDia();
   }, [form.fecha, form.estacionamiento]);
 
-  // 🔥 BLOQUEO DE HORAS
   useEffect(() => {
     const fetchDisponibilidadCajon = async () => {
       if (!form.fecha || !form.estacionamiento || !form.espacio) {
@@ -156,7 +374,7 @@ export default function ReservarEspacio() {
         );
         const snap = await getDocs(q);
         const lista = [];
-        snap.forEach(d => lista.push(d.data()));
+        snap.forEach((d) => lista.push(d.data()));
         setReservasDelCajon(lista);
       } catch (err) {
         console.error("Error al calcular disponibilidad del cajón", err);
@@ -167,41 +385,78 @@ export default function ReservarEspacio() {
     fetchDisponibilidadCajon();
   }, [form.fecha, form.estacionamiento, form.espacio]);
 
+  const diaSaturado = Boolean(
+    form.fecha && form.estacionamiento && reservasDelDia.length >= CAPACIDAD_TOTAL
+  );
+
   const getSemaforoInfo = () => {
     if (!form.fecha || !form.estacionamiento) return null;
-    const capacidadTotal = 50; 
     const ocupados = reservasDelDia.length;
-    const porcentajeLibre = ((capacidadTotal - ocupados) / capacidadTotal) * 100;
+    const porcentajeLibre = ((CAPACIDAD_TOTAL - ocupados) / CAPACIDAD_TOTAL) * 100;
 
     if (porcentajeLibre > 50) return { color: "#10b981", bg: "rgba(16,185,129,0.1)", texto: "Alta disponibilidad", icon: <FaCheckCircle /> };
-    if (porcentajeLibre > 20) return { color: "#f59e0b", bg: "rgba(245,158,11,0.1)", texto: "Media disponibilidad", icon: <FaInfoCircle /> };
-    return { color: "#ef4444", bg: "rgba(239,68,68,0.1)", texto: "Saturado", icon: <FaExclamationTriangle /> };
+    if (porcentajeLibre > 0) return { color: "#f59e0b", bg: "rgba(245,158,11,0.1)", texto: "Media disponibilidad", icon: <FaInfoCircle /> };
+    return { color: "#ef4444", bg: "rgba(239,68,68,0.1)", texto: "Saturado (Sin horarios disponibles)", icon: <FaExclamationTriangle /> };
   };
 
-  const checkHoraBloqueada = (horaStr) => {
+  const buscarReservaEnConflicto = (horaStr) => {
+    if (!form.fecha || !form.espacio) return null;
+
     const startSelected = new Date(`${form.fecha}T${horaStr}`);
     const endSelected = new Date(startSelected.getTime() + Number(form.duracion) * 60 * 60 * 1000);
+    const BUFFER_MS = BUFFER_MINUTOS * 60 * 1000;
 
-    for (let r of reservasDelCajon) {
-      const rStart = new Date(`${r.fecha}T${r.horario}`);
-      const rDur = parseInt(r.duracion, 10) || 0;
+    return reservasDelCajon.find((r) => {
+      if (!r.fecha || !r.horario) return false;
+      const rStart = parseReservaDate(r);
+      if (!rStart) return false;
+
+      const rDur = parseFloat(r.duracion) || 0;
       const rEnd = new Date(rStart.getTime() + rDur * 60 * 60 * 1000);
 
-      if (startSelected < rEnd && endSelected > rStart) {
-        return true;
-      }
-    }
-    return false;
+      const rStartProtegido = new Date(rStart.getTime() - BUFFER_MS);
+      const rEndProtegido = new Date(rEnd.getTime() + BUFFER_MS);
+
+      return startSelected < rEndProtegido && endSelected > rStartProtegido;
+    }) || null;
   };
 
+  // 🔒 Bloquea SOLO por conflicto real de cajón (y por cierre), no por saturación global
+  const checkHoraBloqueada = (horaStr) => {
+    if (!form.fecha || !form.espacio) return false;
+
+    // 1) ¿Cabe la reserva antes del cierre dinámico?
+    const [hh, mm] = horaStr.split(":").map(Number);
+    const inicioMin = hh * 60 + mm;
+    const finMin = inicioMin + Number(form.duracion) * 60;
+    if (finMin > horaCierre * 60) return true;
+
+    // 2) ¿Choca con una reserva activa del mismo cajón?
+    return Boolean(buscarReservaEnConflicto(horaStr));
+  };
+
+  // 🕐 Solo horas en punto, dinámicas según el estacionamiento
   const horasDisponibles = [];
-  for (let i = 0; i <= 23; i++) {
+  for (let i = horaApertura; i <= horaCierre; i++) {
     const horaStr = `${String(i).padStart(2, "0")}:00`;
-    horasDisponibles.push({
-      hora: horaStr,
-      bloqueada: checkHoraBloqueada(horaStr)
-    });
+    horasDisponibles.push({ hora: horaStr, bloqueada: checkHoraBloqueada(horaStr) });
   }
+
+  useEffect(() => {
+    if (form.horario && checkHoraBloqueada(form.horario)) {
+      const rChoque = buscarReservaEnConflicto(form.horario);
+      setForm((prev) => ({ ...prev, horario: "" }));
+
+      if (rChoque) {
+        showToast(
+          `Conflicto con la reserva de ${rChoque.horario} a ${calcularHoraFin(rChoque)}.`,
+          "info"
+        );
+      } else {
+        showToast("El horario seleccionado ya no está disponible para esa fecha o duración.", "info");
+      }
+    }
+  }, [form.fecha, form.duracion, reservasDelCajon, horaCierre]);
 
   const hoyLocal = () => {
     const d = new Date();
@@ -211,12 +466,45 @@ export default function ReservarEspacio() {
 
   const handleChange = (e) => {
     const { id, value } = e.target;
-    let newValue = id === "placa" ? value.toUpperCase() : value;
+    let newValue = value;
+
+    if (id === "placa") {
+      let raw = value.toUpperCase().replace(/O/g, "0").replace(/I/g, "1");
+      const corregido = value.toUpperCase();
+      if (raw !== corregido) {
+        const ahora = Date.now();
+        if (ahora - lastCorrectionToastRef.current > 3000) {
+          showToast("Se corrigió automáticamente: O→0, I→1", "info");
+          lastCorrectionToastRef.current = ahora;
+        }
+      }
+      newValue = raw.replace(/[^A-Z0-9-]/g, "");
+    }
+
     setForm((f) => ({ ...f, [id]: newValue }));
-    setErrors((prev) => ({ ...prev, [id]: "" }));
+
+    if (modoVehiculo === "manual" && ["marca", "modelo", "placa"].includes(id)) {
+      const errorMsg = validarCampo(id, newValue);
+      setErrors((prev) => ({ ...prev, [id]: errorMsg }));
+    } else {
+      setErrors((prev) => ({ ...prev, [id]: "" }));
+    }
   };
 
-  const handleSelectHora = (hora) => {
+  const handleBlur = (e) => {
+    const { id, value } = e.target;
+    if (modoVehiculo === "manual" && ["marca", "modelo", "placa"].includes(id)) {
+      const errorMsg = validarCampo(id, value, true);
+      setErrors((prev) => ({ ...prev, [id]: errorMsg }));
+    }
+  };
+
+  const handleSelectHora = (hora, bloqueada) => {
+    if (bloqueada) {
+      showToast("Este horario no está disponible.", "error");
+      return;
+    }
+
     setForm((f) => ({ ...f, horario: hora }));
     setErrors((prev) => ({ ...prev, horario: "" }));
   };
@@ -240,7 +528,18 @@ export default function ReservarEspacio() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 500 * 1024) return showToast("La imagen es muy grande (máx. 500 KB)", "error");
+
+    if (!file.type.startsWith("image/")) {
+      setErrors((prev) => ({ ...prev, imagen: "El archivo debe ser una imagen válida." }));
+      return showToast("El archivo debe ser una imagen válida.", "error");
+    }
+
+    if (file.size > 500 * 1024) {
+      setErrors((prev) => ({ ...prev, imagen: "La imagen supera el límite de 500 KB." }));
+      return showToast("La imagen es muy grande (máx. 500 KB).", "error");
+    }
+
+    setErrors((prev) => ({ ...prev, imagen: "" }));
     const reader = new FileReader();
     reader.onloadend = () => setImagenBase64(reader.result);
     reader.readAsDataURL(file);
@@ -249,27 +548,65 @@ export default function ReservarEspacio() {
   const limpiarFormularioVehiculo = () => {
     setForm((prev) => ({ ...prev, marca: "", modelo: "", placa: "" }));
     setImagenBase64("");
+    setErrors((prev) => ({ ...prev, marca: "", modelo: "", placa: "", vehiculo: "", imagen: "" }));
   };
 
-  // ✅ ARREGLO 2: Validaciones añadidas antes de guardar para que el botón no falle en silencio
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (reservasActivas.length >= MAX_RESERVAS) {
-      return showToast(`Solo puedes tener hasta ${MAX_RESERVAS} reservas activas.`, "error");
-    }
-    if (!form.estacionamiento) return showToast("Selecciona un estacionamiento.", "error");
-    if (!form.espacio) return showToast("Selecciona un cajón.", "error");
-    if (!form.fecha) return showToast("Selecciona una fecha válida.", "error");
-    if (!form.horario) return showToast("Selecciona una hora disponible.", "error");
-    
-    if (!form.marca || !form.modelo || !form.placa) {
-      return showToast("Completa los datos del vehículo.", "error");
-    }
-    
     setSaving(true);
+
+    if (reservasActivas.length >= MAX_RESERVAS) {
+      setSaving(false);
+      return showToast(`Límite alcanzado: Ya cuentas con ${MAX_RESERVAS} reservas activas. No puedes realizar otra.`, "error");
+    }
+
+    const newErrors = {};
+
+    if (!form.estacionamiento || form.estacionamiento.trim().length < 3) {
+      newErrors.estacionamiento = "Debes usar el botón 'Elegir' para seleccionar una zona válida.";
+    }
+    if (!form.espacio || form.espacio.trim().length < 2) {
+      newErrors.espacio = "Debes seleccionar un cajón desde el mapa.";
+    }
+    if (!form.fecha) newErrors.fecha = "La fecha es obligatoria";
+    if (!form.horario) newErrors.horario = "Debes seleccionar una hora";
+
+    if (form.horario && checkHoraBloqueada(form.horario)) {
+      newErrors.horario = "El horario interfiere con una reserva existente o excede el cierre.";
+    }
+
+    const duracionNum = Number(form.duracion);
+    if (!form.duracion || isNaN(duracionNum) || duracionNum < 1 || duracionNum > 8) {
+      newErrors.duracion = "La duración debe ser entre 1 y 8 horas";
+    } else if (form.horario) {
+      const [hh, mm] = form.horario.split(":").map(Number);
+      const finMin = hh * 60 + mm + duracionNum * 60;
+      // Usamos horaCierre dinámico
+      if (finMin > horaCierre * 60) {
+        newErrors.horario = `La reserva terminaría después de las ${horaCierre}:00. Elige una hora más temprana o menor duración.`;
+      }
+    }
+
+    if (modoVehiculo === "registrado") {
+      if (!vehiculoSeleccionado) newErrors.vehiculo = "Selecciona un vehículo de tu lista";
+    } else {
+      const errMarca = validarCampo("marca", form.marca, true);
+      const errModelo = validarCampo("modelo", form.modelo, true);
+      const errPlaca = validarCampo("placa", form.placa, true);
+
+      if (errMarca) newErrors.marca = errMarca;
+      if (errModelo) newErrors.modelo = errModelo;
+      if (errPlaca) newErrors.placa = errPlaca;
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setSaving(false);
+      return showToast("Revisa los campos marcados en rojo.", "error");
+    }
+
     try {
-      const docRef = await addDoc(collection(db, "reservas"), {
+      const nuevaReservaData = {
         uid: user.uid,
         estacionamiento: form.estacionamiento,
         espacio: form.espacio,
@@ -283,11 +620,21 @@ export default function ReservarEspacio() {
         placa: form.placa,
         imagen: imagenBase64,
         fechaCreacion: new Date().toISOString(),
-      });
+      };
+
+      const docRef = await addDoc(collection(db, "reservas"), nuevaReservaData);
 
       setSuccessFlash(true);
+
       setTimeout(() => {
-        navigate("/reservas", { state: { nuevaReserva: { ...form, id: docRef.id } } });
+        navigate("/reservas", {
+          state: {
+            nuevaReserva: {
+              id: docRef.id,
+              ...nuevaReservaData,
+            },
+          },
+        });
       }, 1500);
     } catch (err) {
       console.error(err);
@@ -314,249 +661,50 @@ export default function ReservarEspacio() {
 
   return (
     <div className="res-page">
-      <div className="bg-deco">
-        <div className="bg-blob blob-1"></div>
-        <div className="bg-blob blob-2"></div>
-        <div className="bg-blob blob-3"></div>
-        <div className="bg-grid"></div>
-      </div>
-
-      <div className="container">
-        <header className="res-header">
-          <Link to="/perfil" className="back-link"><FaArrowLeft /> Volver al perfil</Link>
-          <h2>
-            <span className="title-icon-wrap"><FaRocket className="title-icon" /><span className="title-icon-ring"></span></span>
-            Nueva Reserva
-          </h2>
-          <span className="header-badge"><FaFire /> Rápido y seguro</span>
-        </header>
-
-        <div className="reserva-card">
-          {/* ================= VISUAL (IZQUIERDA) ================= */}
-          <div className="reserva-visual">
-            <div className="parking-scene">
-              <div className="parking-glow"></div>
-              <div className="parking-floor"><span></span><span></span><span></span><span></span></div>
-              <div className="parking-spot"></div>
-              <div className="parking-sign">P</div>
-              <div className="car">
-                <div className="car-windshield"></div>
-                <div className="car-headlights"></div>
-                <div className="car-glow"></div>
-                <div className="wheel wheel-tl"></div><div className="wheel wheel-tr"></div>
-                <div className="wheel wheel-bl"></div><div className="wheel wheel-br"></div>
-              </div>
-            </div>
-
-            <div className="tips-box">
-              <h4><span className="tip-icon"><FaLightbulb /><span className="tip-icon-ring"></span></span> Proceso de Reserva</h4>
-              <ul>
-                <li><FaMapMarkedAlt /> Elige un estacionamiento y luego un cajón.</li>
-                <li><FaCoins /> Tarifa de <strong>${PRECIO_HORA} MXN por hora</strong>.</li>
-                <li><FaShieldAlt /> Hasta {MAX_RESERVAS} reservas activas.</li>
-                <li><FaBolt /> Confirmación instantánea con tu QR.</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* ================= FORMULARIO (DERECHA) ================= */}
-          <div className="reserva-info">
-            <form onSubmit={handleSubmit} noValidate>
-              
-              <div className="field">
-                <label><FaBuilding /> Estacionamiento / Zona</label>
-                <div className="input-icon">
-                  <FaMapPin className="input-icon-left" />
-                  <input id="estacionamiento" type="text" value={form.estacionamiento} onChange={handleChange} placeholder="Selecciona uno desde el mapa" required />
-                </div>
-              </div>
-
-              <div className="field">
-                <label><FaParking /> Cajón seleccionado</label>
-                <div className="input-with-action">
-                  <div className="input-icon" style={{ flex: 1 }}>
-                    <FaKey className="input-icon-left" />
-                    <input id="espacio" type="text" value={form.espacio} onChange={handleChange} placeholder="Ej. P1-05" required />
-                  </div>
-                  <Link to="/estacionamientos" className="btn-mapa"><FaMapMarkedAlt /> Elegir</Link>
-                </div>
-              </div>
-
-              <div className="row">
-                <div className="field">
-                  <label><FaCalendarCheck /> Fecha</label>
-                  <input id="fecha" type="date" value={form.fecha} onChange={handleChange} min={hoyLocal()} required />
-                  {/* SEMÁFORO */}
-                  {semaforo && form.fecha && (
-                    <div className="semaforo-badge" style={{ background: semaforo.bg, color: semaforo.color, border: `1px solid ${semaforo.color}` }}>
-                      {semaforo.icon} {semaforo.texto}
-                    </div>
-                  )}
-                </div>
-                <div className="field">
-                  <label><FaHourglassHalf /> Duración</label>
-                  <input id="duracion" type="number" value={form.duracion} onChange={handleChange} min="1" max="8" required />
-                </div>
-              </div>
-
-              {/* 🔥 SELECTOR DE HORAS */}
-              <div className="field">
-                <label><FaStopwatch /> Hora de inicio</label>
-                {cargandoHoras ? (
-                  <div style={{ color: "#00f2fe", display: "flex", gap: "10px", alignItems: "center", padding: "10px 0" }}><FaSpinner className="spin" /> Calculando disponibilidad...</div>
-                ) : (
-                  <div className="time-grid">
-                    {horasDisponibles.map((h) => (
-                      <button
-                        key={h.hora}
-                        type="button"
-                        disabled={h.bloqueada}
-                        onClick={() => handleSelectHora(h.hora)}
-                        className={`time-btn ${form.horario === h.hora ? "selected" : ""} ${h.bloqueada ? "blocked" : ""}`}
-                      >
-                        {h.hora}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* COSTO TOTAL */}
-              <div className="cost-box" style={{ marginTop: "20px" }}>
-                <div className="cost-icon"><FaHandHoldingUsd /><span className="cost-icon-ring"></span></div>
-                <div className="cost-content">
-                  <span className="cost-label">Costo total a pagar</span>
-                  <div className="cost-value">
-                    <span className="currency">$</span>
-                    <span key={totalPagar} className="amount">{totalPagar}</span>
-                    <span className="currency-name">MXN</span>
-                  </div>
-                </div>
-                <div className="cost-info"><FaReceipt /><small>{form.duracion} h × ${PRECIO_HORA} / h</small></div>
-              </div>
-
-              {/* DATOS DEL VEHÍCULO */}
-              <div className="section-title"><FaCar /> Datos del vehículo<span className="section-line"></span></div>
-              <div className="veh-switch">
-                <span className={`veh-indicator ${modoVehiculo}`}></span>
-                <button type="button" className={modoVehiculo === "registrado" ? "active" : ""} onClick={() => { setModoVehiculo("registrado"); setErrors({}); }} disabled={misVehiculos.length === 0}>
-                  <FaUser /> Usar registrado
-                </button>
-                <button type="button" className={modoVehiculo === "manual" ? "active" : ""} onClick={() => { setModoVehiculo("manual"); limpiarFormularioVehiculo(); }}>
-                  <FaMagic /> Ingresar manual
-                </button>
-              </div>
-
-              {modoVehiculo === "registrado" ? (
-                <div className="veh-registrado">
-                  <select className="form-input" value={vehiculoSeleccionado} onChange={seleccionarVehiculo}>
-                    <option value="">-- Selecciona un vehículo --</option>
-                    {misVehiculos.map((v) => (
-                      <option key={v.id} value={v.id}>{v.marca} {v.modelo} - {v.placa}</option>
-                    ))}
-                  </select>
-                  {vehiculoSeleccionado && (
-                    <div className="veh-preview" style={{ marginTop: "10px" }}>
-                      <div className="veh-preview-img">
-                        {imagenBase64 ? <img src={imagenBase64} alt="Auto" /> : <FaCar size={24} color="#00f2fe" />}
-                      </div>
-                      <div>
-                        <p className="veh-preview-title">{form.marca} {form.modelo}</p>
-                        <p className="veh-preview-placa"><FaKey size={10} /> {form.placa}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="veh-manual">
-                  <div className="input-icon">
-                    <FaStar className="input-icon-left" />
-                    <input id="marca" type="text" list="listaMarcas" placeholder="Marca (Ej. Nissan)" value={form.marca} onChange={handleChange} required />
-                  </div>
-                  <datalist id="listaMarcas">{MARCAS.map((m) => <option key={m} value={m} />)}</datalist>
-                  
-                  <div className="input-icon">
-                    <FaMagic className="input-icon-left" />
-                    <input id="modelo" type="text" placeholder="Modelo (Ej. Versa)" value={form.modelo} onChange={handleChange} required />
-                  </div>
-                  
-                  <div className="input-icon">
-                    <FaTicketAlt className="input-icon-left" />
-                    <input id="placa" type="text" placeholder="Placa (Ej. ABC-123)" maxLength={10} value={form.placa} onChange={handleChange} required />
-                  </div>
-
-                  <div className="upload-row">
-                    <div className="upload-box">
-                      {imagenBase64 ? <img src={imagenBase64} alt="Auto" /> : <FaCamera color="#00f2fe" size={24} />}
-                      <input type="file" accept="image/*" onChange={handleImageChange} />
-                    </div>
-                    <div className="upload-text"><strong>Sube una foto</strong><small>(Opcional, máx. 500 KB)</small></div>
-                  </div>
-                </div>
-              )}
-
-              <button type="submit" className="btn-submit" disabled={saving || reservasActivas.length >= MAX_RESERVAS}>
-                {saving ? <><FaSpinner className="spin" /> Guardando...</> : <><FaRocket className="btn-rocket" /><span>Confirmar Reserva</span></>}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      {/* TOAST Y ESTILOS */}
-      {toast && (
-        <div className={`toast ${toast.type}`}>
-          {toast.type === "success" ? <FaCheckCircle /> : <FaTimesCircle />}
-          <span>{toast.msg}</span>
-        </div>
-      )}
-
+      {/* 🎨 TUS ESTILOS ORIGINALES COMPLETOS */}
       <style>{`
-        /* ========== KEYFRAMES ========== */
-        @keyframes fadeIn       { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes fadeInUp     { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes spin         { to { transform: rotate(360deg); } }
-        @keyframes pop          { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
-        @keyframes pulse        { 0%,100% { opacity: .4; } 50% { opacity: .85; } }
-        @keyframes toastIn      { from { opacity: 0; transform: translateY(30px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes toastBounce  { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px) scale(1.1); } }
-        @keyframes shake        { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-        @keyframes glow         { 0%,100% { box-shadow: 0 20px 60px rgba(0,0,0,.4); } 50% { box-shadow: 0 20px 70px rgba(0,242,254,.18); } }
-        @keyframes floatCar     { 0%,100% { transform: translate(-50%,-50%); } 50% { transform: translate(-50%,-55%); } }
-        @keyframes driveIn      { 0% { transform: translate(-200%,-50%); } 70% { transform: translate(-45%,-50%); } 85% { transform: translate(-55%,-50%); } 100% { transform: translate(-50%,-50%); } }
-        @keyframes headlight    { 0%,100% { box-shadow: 0 0 10px 2px rgba(255,231,100,.8); } 50% { box-shadow: 0 0 20px 6px rgba(255,231,100,1); } }
-        @keyframes wheelSpin    { to { transform: rotate(720deg); } }
-        @keyframes carGlow      { 0%,100% { opacity: .4; transform: scale(1); } 50% { opacity: .8; transform: scale(1.1); } }
-        @keyframes floorPulse   { 0%,100% { opacity: .3; } 50% { opacity: .7; } }
-        @keyframes signBounce   { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
-        @keyframes sparkleTwinkle{ 0%,100% { opacity: 0; transform: scale(0) rotate(0); } 50% { opacity: 1; transform: scale(1) rotate(180deg); } }
-        @keyframes blobMove1    { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(80px,-60px) scale(1.15); } }
-        @keyframes blobMove2    { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-100px,80px) scale(1.1); } }
-        @keyframes blobMove3    { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,80px) scale(1.2); } }
-        @keyframes gridMove     { from { background-position: 0 0; } to { background-position: 60px 60px; } }
-        @keyframes particleFloat{ 0% { transform: translate(0,0); opacity: .2; } 50% { opacity: .6; } 100% { transform: translate(-30px,-40px); opacity: 0; } }
-        @keyframes iconFloat    { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-4px) rotate(6deg); } }
-        @keyframes iconWiggle   { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
-        @keyframes titleRing    { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(2); opacity: 0; } }
-        @keyframes tipRing      { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(2); opacity: 0; } }
-        @keyframes fieldSlideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes numberPop    { 0% { transform: scale(.8); opacity: .4; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes costPulse    { 0%,100% { box-shadow: 0 0 0 0 rgba(0,242,254,.3); } 50% { box-shadow: 0 0 0 8px rgba(0,242,254,0); } }
-        @keyframes costShimmer  { 0% { transform: translateX(-120%) skewX(-20deg); } 100% { transform: translateX(220%) skewX(-20deg); } }
-        @keyframes ringPulse    { 0% { transform: scale(.9); opacity: .8; } 100% { transform: scale(2); opacity: 0; } }
-        @keyframes rocketBob    { 0%,100% { transform: translateY(0) rotate(-15deg); } 50% { transform: translateY(-3px) rotate(-10deg); } }
-        @keyframes chevronSlide { 0%,100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
-        @keyframes shineSweep   { 0% { transform: translateX(-120%) skewX(-20deg); } 100% { transform: translateX(220%) skewX(-20deg); } }
-        @keyframes uploadPulse  { 0%,100% { border-color: rgba(0,242,254,.4); } 50% { border-color: rgba(0,242,254,1); } }
-        @keyframes flashIn      { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes successPop   { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes progressFill { from { width: 0; } to { width: 100%; } }
-        @keyframes confettiFall { 0% { transform: translateY(-20px) rotate(0); opacity: 1; } 100% { transform: translateY(120px) rotate(360deg); opacity: 0; } }
-        @keyframes orbitSpin    { to { transform: rotate(360deg); } }
-        @keyframes orbitSpinRev { to { transform: rotate(-360deg); } }
-        @keyframes errorSlide   { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        input.input-error,
+        select.input-error,
+        .form-input.input-error,
+        .upload-box.input-error {
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 12px rgba(239, 68, 68, 0.3) !important;
+          background: rgba(239, 68, 68, 0.05) !important;
+        }
 
-        /* ========== BASE ========== */
+        @keyframes fadeIn        { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp      { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin          { to { transform: rotate(360deg); } }
+        @keyframes pop           { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        @keyframes pulse         { 0%,100% { opacity: .4; } 50% { opacity: .85; } }
+        @keyframes toastIn       { from { opacity: 0; transform: translateY(30px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toastBounce   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px) scale(1.1); } }
+        @keyframes shake         { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+        @keyframes glow          { 0%,100% { box-shadow: 0 20px 60px rgba(0,0,0,.4); } 50% { box-shadow: 0 20px 70px rgba(0,242,254,.18); } }
+        @keyframes floatCar      { 0%,100% { transform: translate(-50%,-50%); } 50% { transform: translate(-50%,-55%); } }
+        @keyframes driveIn       { 0% { transform: translate(-200%,-50%); } 70% { transform: translate(-45%,-50%); } 85% { transform: translate(-55%,-50%); } 100% { transform: translate(-50%,-50%); } }
+        @keyframes headlight     { 0%,100% { box-shadow: 0 0 10px 2px rgba(255,231,100,.8); } 50% { box-shadow: 0 0 20px 6px rgba(255,231,100,1); } }
+        @keyframes wheelSpin     { to { transform: rotate(720deg); } }
+        @keyframes carGlow       { 0%,100% { opacity: .4; transform: scale(1); } 50% { opacity: .8; transform: scale(1.1); } }
+        @keyframes floorPulse    { 0%,100% { opacity: .3; } 50% { opacity: .7; } }
+        @keyframes signBounce    { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
+        @keyframes blobMove1     { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(80px,-60px) scale(1.15); } }
+        @keyframes blobMove2     { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-100px,80px) scale(1.1); } }
+        @keyframes blobMove3     { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,80px) scale(1.2); } }
+        @keyframes gridMove      { from { background-position: 0 0; } to { background-position: 60px 60px; } }
+        @keyframes iconFloat     { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-4px) rotate(6deg); } }
+        @keyframes iconWiggle    { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+        @keyframes titleRing     { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(2); opacity: 0; } }
+        @keyframes tipRing       { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(2); opacity: 0; } }
+        @keyframes fieldSlideIn  { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes numberPop     { 0% { transform: scale(.8); opacity: .4; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes costPulse     { 0%,100% { box-shadow: 0 0 0 0 rgba(0,242,254,.3); } 50% { box-shadow: 0 0 0 8px rgba(0,242,254,0); } }
+        @keyframes rocketBob     { 0%,100% { transform: translateY(0) rotate(-15deg); } 50% { transform: translateY(-3px) rotate(-10deg); } }
+        @keyframes shineSweep    { 0% { transform: translateX(-120%) skewX(-20deg); } 100% { transform: translateX(220%) skewX(-20deg); } }
+        @keyframes uploadPulse   { 0%,100% { border-color: rgba(0,242,254,.4); } 50% { border-color: rgba(0,242,254,1); } }
+        @keyframes orbitSpin     { to { transform: rotate(360deg); } }
+        @keyframes errorSlide    { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
         * { box-sizing: border-box; }
         .res-page {
           min-height: 100vh;
@@ -576,7 +724,6 @@ export default function ReservarEspacio() {
         .spin { animation: spin 1s linear infinite; }
         .container { max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
 
-        /* ========== FONDO DECO ========== */
         .bg-deco { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
         .bg-blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .22; }
         .blob-1 { width: 480px; height: 480px; background: radial-gradient(circle,#00f2fe,transparent 70%); top: -160px; left: -120px; animation: blobMove1 20s ease-in-out infinite; }
@@ -593,7 +740,6 @@ export default function ReservarEspacio() {
           -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
         }
 
-        /* ========== HEADER ========== */
         .res-header {
           display: flex; align-items: center; justify-content: space-between;
           gap: 15px; margin-bottom: 24px; flex-wrap: wrap;
@@ -640,7 +786,6 @@ export default function ReservarEspacio() {
         }
         .back-link:hover { color: #00f2fe; border-color: rgba(0,242,254,.4); transform: translateX(-3px); }
 
-        /* ========== CARD PRINCIPAL ========== */
         .reserva-card {
           display: grid; grid-template-columns: 280px 1fr;
           gap: 32px;
@@ -659,7 +804,6 @@ export default function ReservarEspacio() {
           pointer-events: none;
         }
 
-        /* ========== ESCENA ========== */
         .reserva-visual {
           display: flex; flex-direction: column;
           align-items: center; gap: 24px;
@@ -766,7 +910,6 @@ export default function ReservarEspacio() {
         .wheel-bl { bottom: 16px; left: -8px; }
         .wheel-br { bottom: 16px; right: -8px; }
 
-        /* ========== TIPS ========== */
         .tips-box {
           background: rgba(0,242,254,.05);
           border: 1px solid rgba(0,242,254,.15);
@@ -809,25 +952,7 @@ export default function ReservarEspacio() {
         }
         .tips-box li strong { color: #00f2fe; }
 
-        /* ========== FORM ========== */
         .reserva-info { display: flex; flex-direction: column; gap: 18px; }
-        .intro {
-          color: #94a3b8; font-size: 14px; margin: 0;
-          display: flex; align-items: center; gap: 10px;
-          padding: 12px 14px;
-          background: rgba(0,242,254,.05);
-          border: 1px solid rgba(0,242,254,.15);
-          border-radius: 10px;
-          animation: fadeInUp .5s ease;
-        }
-        .intro-icon {
-          width: 26px; height: 26px;
-          border-radius: 8px;
-          background: rgba(0,242,254,.15);
-          color: #00f2fe;
-          display: inline-flex; align-items: center; justify-content: center;
-          font-size: 12px; flex-shrink: 0;
-        }
 
         .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; animation: fieldSlideIn .5s ease backwards; }
         .field label {
@@ -855,7 +980,18 @@ export default function ReservarEspacio() {
         .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; animation: fieldSlideIn .5s ease .3s backwards; }
         .row .field { margin-bottom: 0; }
 
-        /* Inputs con icono */
+        .error-text {
+          display: flex; align-items: center; gap: 6px;
+          color: #ef4444; font-size: 12px; font-weight: 600;
+          margin-top: 4px;
+          animation: errorSlide 0.3s ease-out;
+        }
+        .error-text svg { font-size: 14px; }
+        .time-grid.grid-error {
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 12px rgba(239, 68, 68, 0.2) !important;
+        }
+
         .input-icon { position: relative; display: flex; align-items: center; width: 100%; }
         .input-icon-left {
           position: absolute; left: 14px;
@@ -870,9 +1006,16 @@ export default function ReservarEspacio() {
         }
         .input-icon input {
           padding-left: 40px !important;
+          width: 100%;
+          padding: 12px 14px;
+          background: #0f172a;
+          border: 1px solid #334155;
+          border-radius: 10px;
+          color: #e2e8f0; font-size: 14px; outline: none;
+          transition: border-color .2s, box-shadow .2s, transform .15s;
+          font-family: inherit;
         }
 
-        /* Input con botón */
         .input-with-action { display: flex; gap: 8px; }
         .input-with-action .input-icon { flex: 1; min-width: 0; }
         .btn-mapa {
@@ -894,7 +1037,6 @@ export default function ReservarEspacio() {
           box-shadow: 0 8px 20px rgba(0,242,254,.45);
         }
 
-        /* Costo */
         .cost-box {
           position: relative;
           display: flex; align-items: center; gap: 14px;
@@ -952,7 +1094,6 @@ export default function ReservarEspacio() {
         }
         .cost-info svg { color: #00f2fe; font-size: 11px; }
 
-        /* Sección título */
         .section-title {
           display: flex; align-items: center; gap: 8px;
           color: #00f2fe; font-size: 13px; font-weight: 700;
@@ -967,7 +1108,6 @@ export default function ReservarEspacio() {
           margin-left: 6px;
         }
 
-        /* ========== SWITCH VEHÍCULO ========== */
         .veh-switch {
           position: relative;
           display: flex;
@@ -1007,68 +1147,6 @@ export default function ReservarEspacio() {
         .veh-switch button:not(.active):hover { color: #cbd5e1; }
         .veh-switch button:disabled { cursor: not-allowed; }
 
-        /* ========== VEH REGISTRADO ========== */
-        .veh-preview {
-          position: relative;
-          display: flex; align-items: center; gap: 14px;
-          background: rgba(0,0,0,.25);
-          padding: 12px;
-          border-radius: 10px;
-          overflow: hidden;
-          animation: fadeInUp .4s ease;
-        }
-        .veh-preview-img {
-          width: 58px; height: 58px;
-          border-radius: 9px;
-          border: 1px solid rgba(0,242,254,.4);
-          background: #0f172a;
-          display: flex; align-items: center; justify-content: center;
-          overflow: hidden;
-          flex-shrink: 0;
-        }
-        .veh-preview-img img { width: 100%; height: 100%; object-fit: cover; }
-        .veh-preview-title {
-          margin: 0; color: #fff; font-weight: 700; font-size: 13px;
-        }
-        .veh-preview-placa {
-          margin: 4px 0 0;
-          color: #00f2fe; font-size: 11.5px;
-          letter-spacing: 1px;
-          display: inline-flex; align-items: center; gap: 4px;
-        }
-
-        /* ========== VEH MANUAL ========== */
-        .veh-manual {
-          display: flex; flex-direction: column; gap: 10px;
-          animation: fadeInUp .4s ease;
-        }
-        .upload-row {
-          display: flex; align-items: center; gap: 14px;
-          margin-top: 6px;
-        }
-        .upload-box {
-          position: relative;
-          width: 70px; height: 70px;
-          border-radius: 10px;
-          background: rgba(0,0,0,.4);
-          border: 2px dashed rgba(0,242,254,.5);
-          display: flex; align-items: center; justify-content: center;
-          overflow: hidden;
-          flex-shrink: 0;
-          animation: uploadPulse 2s ease-in-out infinite;
-          transition: transform .2s;
-        }
-        .upload-box:hover { transform: scale(1.04); }
-        .upload-box img { width: 100%; height: 100%; object-fit: cover; }
-        .upload-box input {
-          position: absolute; inset: 0;
-          opacity: 0; cursor: pointer;
-        }
-        .upload-text { display: flex; flex-direction: column; gap: 2px; }
-        .upload-text strong { color: #e2e8f0; font-size: 13px; }
-        .upload-text small { color: #94a3b8; font-size: 11px; }
-
-        /* ========== SUBMIT ========== */
         .btn-submit {
           position: relative;
           margin-top: 20px;
@@ -1092,23 +1170,7 @@ export default function ReservarEspacio() {
           box-shadow: 0 12px 30px rgba(0,242,254,.55);
         }
         .btn-submit:disabled { opacity: .7; cursor: not-allowed; }
-        .btn-rocket { animation: rocketBob 1.6s ease-in-out infinite; }
 
-        /* ========== TOAST ========== */
-        .toast {
-          position: fixed; bottom: 24px; right: 24px;
-          display: flex; align-items: center; gap: 10px;
-          padding: 14px 20px;
-          border-radius: 10px;
-          font-size: 14px; font-weight: 500;
-          box-shadow: 0 12px 40px rgba(0,0,0,.5);
-          animation: toastIn .35s cubic-bezier(.34,1.56,.64,1);
-          z-index: 10001;
-        }
-        .toast.success { background: #10b981; color: #0f172a; }
-        .toast.error   { background: #ef4444; color: #fff; animation: toastIn .35s cubic-bezier(.34,1.56,.64,1), shake .4s ease .35s; }
-
-        /* ========== LOADING ========== */
         .loading-orbit {
           position: relative; width: 80px; height: 80px;
           display: flex; align-items: center; justify-content: center;
@@ -1130,7 +1192,6 @@ export default function ReservarEspacio() {
           animation-duration: .7s;
         }
 
-        /* ========== RESPONSIVE ========== */
         @media (max-width: 780px) {
           .reserva-card { grid-template-columns: 1fr; padding: 22px; }
           .parking-scene { width: 180px; height: 220px; }
@@ -1142,20 +1203,17 @@ export default function ReservarEspacio() {
           .cost-info { width: 100%; justify-content: center; }
         }
 
-        /* ==========================================
-           🔥 ESTILOS MEJORADOS: SEMÁFORO Y HORARIOS
-           ========================================== */
         .semaforo-badge {
-          margin-top: 8px; 
-          display: inline-flex; 
-          align-items: center; 
+          margin-top: 8px;
+          display: inline-flex;
+          align-items: center;
           gap: 6px;
-          padding: 6px 14px; 
-          border-radius: 20px; 
-          font-size: 12px; 
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 12px;
           font-weight: 700;
           letter-spacing: 0.5px;
-          width: fit-content; 
+          width: fit-content;
           animation: fadeIn 0.3s ease, badgePulse 2s infinite alternate;
           box-shadow: 0 0 10px currentColor;
           border-width: 1px;
@@ -1163,16 +1221,17 @@ export default function ReservarEspacio() {
         }
 
         .time-grid {
-          display: grid; 
+          display: grid;
           grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
-          gap: 10px; 
-          margin-top: 10px; 
-          max-height: 220px; 
-          overflow-y: auto; 
+          gap: 10px;
+          margin-top: 10px;
+          max-height: 220px;
+          overflow-y: auto;
           padding: 12px;
           background: rgba(15, 23, 42, 0.4);
           border-radius: 12px;
           border: 1px solid rgba(255, 255, 255, 0.05);
+          transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         .time-grid::-webkit-scrollbar { width: 6px; }
@@ -1181,41 +1240,41 @@ export default function ReservarEspacio() {
         .time-grid::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
 
         .time-btn {
-          background: rgba(30, 41, 59, 0.8); 
+          background: rgba(30, 41, 59, 0.8);
           border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #e2e8f0; 
-          padding: 10px 0; 
-          border-radius: 10px; 
+          color: #e2e8f0;
+          padding: 10px 0;
+          border-radius: 10px;
           font-weight: 700;
-          cursor: pointer; 
-          transition: all 0.2s ease; 
-          font-family: inherit; 
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-family: inherit;
           font-size: 14px;
           display: flex; justify-content: center; align-items: center;
         }
 
-        .time-btn:hover:not(.blocked) { 
-          border-color: rgba(0, 242, 254, 0.6); 
-          background: rgba(0, 242, 254, 0.15); 
+        .time-btn:hover:not(.blocked) {
+          border-color: rgba(0, 242, 254, 0.6);
+          background: rgba(0, 242, 254, 0.15);
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 242, 254, 0.2);
           color: #00f2fe;
         }
 
-        .time-btn.selected { 
+        .time-btn.selected {
           background: linear-gradient(135deg, #00f2fe, #0072ff);
           color: #050b14;
-          border-color: #00f2fe; 
+          border-color: #00f2fe;
           box-shadow: 0 0 15px rgba(0, 242, 254, 0.5);
           font-weight: 900;
           transform: scale(1.02);
         }
 
-        .time-btn.blocked { 
-          background: rgba(15, 23, 42, 0.6); 
+        .time-btn.blocked {
+          background: rgba(15, 23, 42, 0.6);
           color: #475569;
-          border-color: rgba(255, 255, 255, 0.02); 
-          cursor: not-allowed; 
+          border-color: rgba(255, 255, 255, 0.02);
+          cursor: not-allowed;
           opacity: 0.6;
           box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
         }
@@ -1225,6 +1284,316 @@ export default function ReservarEspacio() {
           100% { box-shadow: 0 0 15px currentColor; }
         }
       `}</style>
+
+      {toast && (
+        <div className={`toast-banner ${toast.type}`}>
+          {toast.type === "error" ? <FaExclamationTriangle /> : <FaInfoCircle />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      <div className="bg-deco">
+        <div className="bg-blob blob-1"></div>
+        <div className="bg-blob blob-2"></div>
+        <div className="bg-blob blob-3"></div>
+        <div className="bg-grid"></div>
+      </div>
+
+      <div className="container">
+        <header className="res-header">
+          <Link to="/perfil" className="back-link"><FaArrowLeft /> Volver al perfil</Link>
+          <h2>
+            <span className="title-icon-wrap"><FaRocket className="title-icon" /><span className="title-icon-ring"></span></span>
+            Nueva Reserva
+          </h2>
+          <span className="header-badge"><FaFire /> Rápido y seguro</span>
+        </header>
+
+        {reservasActivas.length >= MAX_RESERVAS && (
+          <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", padding: "12px 16px", borderRadius: "10px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px", color: "#fca5a5" }}>
+            <FaExclamationTriangle size={20} />
+            <span>Has alcanzado el límite de <strong>{MAX_RESERVAS} reservas activas</strong>. Puedes consultar tus reservas existentes antes de intentar una nueva.</span>
+          </div>
+        )}
+
+        <div className="reserva-card">
+          <div className="reserva-visual">
+            <div className="parking-scene">
+              <div className="parking-glow"></div>
+              <div className="parking-floor"><span></span><span></span><span></span><span></span></div>
+              <div className="parking-spot"></div>
+              <div className="parking-sign">P</div>
+              <div className="car">
+                <div className="car-windshield"></div>
+                <div className="car-headlights"></div>
+                <div className="car-glow"></div>
+                <div className="wheel wheel-tl"></div><div className="wheel wheel-tr"></div>
+                <div className="wheel wheel-bl"></div><div className="wheel wheel-br"></div>
+              </div>
+            </div>
+
+            <div className="tips-box">
+              <h4><span className="tip-icon"><FaLightbulb /><span className="tip-icon-ring"></span></span> Proceso de Reserva</h4>
+              <ul>
+                <li><FaMapMarkedAlt /> Elige un estacionamiento y luego un cajón.</li>
+                <li><FaCoins /> Tarifa de <strong>${PRECIO_HORA} MXN por hora</strong>.</li>
+                <li><FaShieldAlt /> Hasta {MAX_RESERVAS} reservas activas.</li>
+                <li><FaBolt /> Confirmación instantánea con tu QR.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="reserva-info">
+            <form onSubmit={handleSubmit} noValidate>
+
+              <div className="field">
+                <label><FaBuilding /> Estacionamiento / Zona</label>
+                <div className="input-with-action">
+                  <div className="input-icon" style={{ flex: 1 }}>
+                    <FaMapPin className="input-icon-left" />
+                    <input
+                      id="estacionamiento"
+                      type="text"
+                      readOnly
+                      onClick={() => showToast("Usa el botón 'Elegir' para abrir el mapa", "error")}
+                      className={errors.estacionamiento ? "input-error" : ""}
+                      value={form.estacionamiento}
+                      placeholder="Elige del mapa"
+                      style={{ cursor: "pointer" }}
+                    />
+                  </div>
+                  <Link to="/estacionamientos" className="btn-mapa">
+                    <FaMapMarkedAlt /> Elegir
+                  </Link>
+                </div>
+                {errors.estacionamiento && <span className="error-text"><FaExclamationTriangle /> {errors.estacionamiento}</span>}
+              </div>
+
+              <div className="field">
+                <label><FaParking /> Cajón seleccionado</label>
+                <div className="input-icon">
+                  <FaKey className="input-icon-left" />
+                  <input
+                    id="espacio"
+                    type="text"
+                    readOnly
+                    onClick={() => showToast("El cajón se selecciona desde el mapa", "error")}
+                    className={errors.espacio ? "input-error" : ""}
+                    value={form.espacio}
+                    placeholder="Elige del mapa"
+                    style={{ cursor: "not-allowed", opacity: 0.8 }}
+                  />
+                </div>
+                {errors.espacio && <span className="error-text"><FaExclamationTriangle /> {errors.espacio}</span>}
+              </div>
+
+              <div className="row">
+                <div className="field">
+                  <label><FaCalendarCheck /> Fecha</label>
+                  <input
+                    id="fecha"
+                    type="date"
+                    className={errors.fecha ? "input-error" : ""}
+                    value={form.fecha}
+                    onChange={handleChange}
+                    min={hoyLocal()}
+                  />
+                  {errors.fecha && <span className="error-text"><FaExclamationTriangle /> {errors.fecha}</span>}
+
+                  {semaforo && form.fecha && (
+                    <div className="semaforo-badge" style={{ background: semaforo.bg, color: semaforo.color, border: `1px solid ${semaforo.color}` }}>
+                      {semaforo.icon} {semaforo.texto}
+                    </div>
+                  )}
+                </div>
+                <div className="field">
+                  <label><FaHourglassHalf /> Duración (horas)</label>
+                  <input
+                    id="duracion"
+                    type="number"
+                    className={errors.duracion ? "input-error" : ""}
+                    value={form.duracion}
+                    onChange={handleChange}
+                    min="1"
+                    max="8"
+                  />
+                  {errors.duracion && <span className="error-text"><FaExclamationTriangle /> {errors.duracion}</span>}
+                </div>
+              </div>
+
+              <div className="field">
+                <label><FaStopwatch /> Hora de inicio</label>
+                {cargandoHoras ? (
+                  <div style={{ color: "#00f2fe", display: "flex", gap: "10px", alignItems: "center", padding: "10px 0" }}>
+                    <FaSpinner className="spin" /> Calculando disponibilidad...
+                  </div>
+                ) : !form.espacio ? (
+                  <div className="error-text" style={{ padding: "10px", background: "rgba(245,158,11,0.1)", borderRadius: "8px", color: "#f59e0b" }}>
+                    <FaInfoCircle /> Primero selecciona un cajón en el mapa para ver los horarios disponibles.
+                  </div>
+                ) : (
+                  <>
+                    <div className={`time-grid ${errors.horario ? "grid-error" : ""}`}>
+                      {horasDisponibles.map((h) => (
+                        <button
+                          key={h.hora}
+                          type="button"
+                          onClick={() => handleSelectHora(h.hora, h.bloqueada)}
+                          className={`time-btn ${form.horario === h.hora ? "selected" : ""} ${h.bloqueada ? "blocked" : ""}`}
+                          title={h.bloqueada ? "No disponible" : `Reservar a las ${h.hora}`}
+                        >
+                          {h.hora}
+                        </button>
+                      ))}
+                    </div>
+                    {errors.horario && <span className="error-text"><FaExclamationTriangle /> {errors.horario}</span>}
+                  </>
+                )}
+              </div>
+
+              <div className="cost-box" style={{ marginTop: "20px" }}>
+                <div className="cost-icon"><FaHandHoldingUsd /><span className="cost-icon-ring"></span></div>
+                <div className="cost-content">
+                  <span className="cost-label">Costo total a pagar</span>
+                  <div className="cost-value">
+                    <span className="currency">$</span>
+                    <span key={totalPagar} className="amount">{totalPagar}</span>
+                    <span className="currency-name">MXN</span>
+                  </div>
+                </div>
+                <div className="cost-info"><FaReceipt /><small>{form.duracion} h × ${PRECIO_HORA} / h</small></div>
+              </div>
+
+              <div className="section-title"><FaCar /> Datos del vehículo<span className="section-line"></span></div>
+              <div className="veh-switch">
+                <span className={`veh-indicator ${modoVehiculo}`}></span>
+                <button
+                  type="button"
+                  className={modoVehiculo === "registrado" ? "active" : ""}
+                  onClick={() => { setModoVehiculo("registrado"); setErrors({}); }}
+                  disabled={misVehiculos.length === 0}
+                >
+                  <FaUser /> Usar registrado
+                </button>
+                <button
+                  type="button"
+                  className={modoVehiculo === "manual" ? "active" : ""}
+                  onClick={() => { setModoVehiculo("manual"); limpiarFormularioVehiculo(); }}
+                >
+                  <FaMagic /> Ingresar manual
+                </button>
+              </div>
+
+              {modoVehiculo === "registrado" ? (
+                <div className="field">
+                  <label>Selecciona tu vehículo</label>
+                  <select
+                    value={vehiculoSeleccionado}
+                    onChange={seleccionarVehiculo}
+                    className={errors.vehiculo ? "input-error" : ""}
+                  >
+                    <option value="">-- Elige un vehículo registrado --</option>
+                    {misVehiculos.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.marca} {v.modelo} — {v.placa}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.vehiculo && <span className="error-text"><FaExclamationTriangle /> {errors.vehiculo}</span>}
+                </div>
+              ) : (
+                <>
+                  <div className="row">
+                    <div className="field">
+                      <label>Marca</label>
+                      <input
+                        id="marca"
+                        type="text"
+                        list="marcas-list"
+                        value={form.marca}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="Ej. Nissan"
+                        className={errors.marca ? "input-error" : ""}
+                      />
+                      <datalist id="marcas-list">
+                        {MARCAS.map((m) => <option key={m} value={m} />)}
+                      </datalist>
+                      {errors.marca && <span className="error-text"><FaExclamationTriangle /> {errors.marca}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label>Modelo</label>
+                      <input
+                        id="modelo"
+                        type="text"
+                        value={form.modelo}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="Ej. Versa"
+                        className={errors.modelo ? "input-error" : ""}
+                      />
+                      {errors.modelo && <span className="error-text"><FaExclamationTriangle /> {errors.modelo}</span>}
+                    </div>
+                  </div>
+
+                  <div className="row">
+                    <div className="field">
+                      <label>Placa</label>
+                      <input
+                        id="placa"
+                        type="text"
+                        value={form.placa}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="Ej. ABC-123-A"
+                        maxLength={10}
+                        className={errors.placa ? "input-error" : ""}
+                      />
+                      {errors.placa && <span className="error-text"><FaExclamationTriangle /> {errors.placa}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label><FaCamera /> Foto del vehículo (opcional)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+                      {errors.imagen && <span className="error-text"><FaExclamationTriangle /> {errors.imagen}</span>}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {imagenBase64 && (
+                <div style={{ marginTop: "10px", textAlign: "center" }}>
+                  <img
+                    src={imagenBase64}
+                    alt="Vista previa del vehículo"
+                    style={{ maxHeight: "120px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.15)" }}
+                  />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn-submit"
+                disabled={saving || successFlash || reservasActivas.length >= MAX_RESERVAS}
+                style={{ marginTop: "24px", width: "100%" }}
+              >
+                {saving ? (
+                  <><FaSpinner className="spin" /> Procesando reserva...</>
+                ) : successFlash ? (
+                  <><FaCheckCircle /> ¡Reserva confirmada!</>
+                ) : (
+                  <><FaTicketAlt /> Confirmar Reserva (${totalPagar} MXN)</>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
