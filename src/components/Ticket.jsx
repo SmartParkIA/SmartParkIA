@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
-  doc, getDoc, updateDoc, serverTimestamp,
+  doc, getDoc
 } from "firebase/firestore";
 import { db } from "../firebase/config.js";
 import {
@@ -16,7 +16,6 @@ export default function Ticket() {
   const [qr, setQr] = useState(null);
   const [reserva, setReserva] = useState(null);
   const [error, setError] = useState(null);
-  const [showLlegada, setShowLlegada] = useState(false);
 
   useEffect(() => {
     const qrId = searchParams.get("qrId");
@@ -28,66 +27,78 @@ export default function Ticket() {
 
     let cancel = false;
 
-    const validar = async () => {
-      try {
-        const qrRef = doc(db, "codigos_qr", qrId);
-        const qrSnap = await getDoc(qrRef);
+    
+const validar = async () => {
+  try {
+    const qrRef = doc(db, "codigos_qr", qrId);
+    const qrSnap = await getDoc(qrRef);
 
-        if (!qrSnap.exists()) {
-          setError("No encontramos ese código QR");
-          setStatus("error");
-          return;
-        }
+    if (!qrSnap.exists()) {
+      setError("No encontramos ese código QR");
+      setStatus("error");
+      return;
+    }
 
-        const qrData = { id: qrSnap.id, ...qrSnap.data() };
-        if (cancel) return;
-        setQr(qrData);
+    const qrData = { id: qrSnap.id, ...qrSnap.data() };
 
-        // 🔒 Verificar estado
-        if (qrData.estado === "escaneado") {
-          setStatus("already");
-          return;
-        }
+    if (cancel) return;
+    setQr(qrData);
 
-        if (qrData.estado === "cancelado") {
-          setStatus("expired");
-          return;
-        }
+    if (qrData.estado === "escaneado") {
+      setStatus("already");
+      return;
+    }
 
-        // ⏱️ Verificar expiración manual (por si el cron no lo ha cancelado)
-        const expira = qrData.expiraEn?.toDate?.() || new Date(qrData.expiraEn);
-        if (new Date() > expira) {
-          await updateDoc(qrRef, { estado: "cancelado" });
-          setStatus("expired");
-          return;
-        }
+    if (qrData.estado === "cancelado") {
+      setStatus("expired");
+      return;
+    }
 
-        // ✅ Marcar como escaneado
-        await updateDoc(qrRef, {
-          estado: "escaneado",
-          escaneadoEn: serverTimestamp(),
-        });
+    const expira = qrData.expiraEn?.toDate?.()
+      || new Date(qrData.expiraEn);
 
-        // 📥 Cargar la reserva
-        const reservaSnap = await getDoc(doc(db, "reservas", qrData.reservaId));
-        if (reservaSnap.exists()) {
-          setReserva({ id: reservaSnap.id, ...reservaSnap.data() });
-        }
+    if (!expira || Number.isNaN(expira.getTime()) || Date.now() > expira.getTime()) {
+      setStatus("expired");
+      return;
+    }
 
-        if (cancel) return;
-        setStatus("ready");
+    // Consultar la reserva sin modificar el QR.
+    const reservaSnap = await getDoc(
+      doc(db, "reservas", qrData.reservaId)
+    );
 
-        // 🎬 Mostrar modal de llegada con retraso para animación
-        setTimeout(() => {
-          if (!cancel) setShowLlegada(true);
-        }, 700);
-      } catch (err) {
-        console.error(err);
-        if (cancel) return;
-        setError(err.message);
-        setStatus("error");
-      }
+    if (!reservaSnap.exists()) {
+      setError("No encontramos la reserva asociada a este QR");
+      setStatus("error");
+      return;
+    }
+
+    const reservaData = {
+      id: reservaSnap.id,
+      ...reservaSnap.data()
     };
+
+    if (reservaData.estado === "cancelada") {
+      setError("Esta reserva fue cancelada");
+      setStatus("error");
+      return;
+    }
+
+    if (cancel) return;
+
+    setReserva(reservaData);
+    setStatus("ready");
+
+  } catch (err) {
+    console.error(err);
+
+    if (cancel) return;
+
+    setError(err.message);
+    setStatus("error");
+  }
+};
+
 
     validar();
     return () => {
@@ -176,11 +187,11 @@ export default function Ticket() {
               <span className="tk-icon-ring"></span>
               <span className="tk-icon-ring tk-icon-ring--2"></span>
             </div>
-            <h1>¡Llegaste!</h1>
+            <h1>¡Tu boleto está listo!</h1>
             <p className="tk-subtitle">
-              <FaQrcode /> Código QR validado correctamente
+              <FaQrcode /> QR listo para presentar al encargado
             </p>
-
+            
             <div className="tk-info">
               <div className="tk-info-row">
                 <FaBuilding />
@@ -228,41 +239,7 @@ export default function Ticket() {
         )}
       </div>
 
-      {/* ============ MODAL DE LLEGADA ============ */}
-      {showLlegada && (
-        <div
-          className="tk-modal-overlay"
-          onClick={() => setShowLlegada(false)}
-        >
-          <div
-            className="tk-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="tk-modal-icon">
-              <FaCheckCircle />
-              <span className="tk-modal-ring"></span>
-              <span className="tk-modal-ring tk-modal-ring--2"></span>
-            </div>
-            <h2>¡Has llegado al estacionamiento!</h2>
-            <p className="tk-modal-sub">
-              {reserva?.estacionamiento || "Estacionamiento"}
-            </p>
-
-            <div className="tk-modal-confetti">
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-            </div>
-
-            <button
-              className="tk-btn"
-              onClick={() => setShowLlegada(false)}
-            >
-              <FaCheckCircle /> Entendido
-            </button>
-          </div>
-        </div>
-      )}
-
+      
       {/* ============ ESTILOS ============ */}
       <style>{`
         @keyframes tkFadeIn    { from { opacity: 0; } to { opacity: 1; } }

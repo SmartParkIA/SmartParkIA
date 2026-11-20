@@ -25,11 +25,16 @@ const MapaEstacionamiento = lazy(() => import('./components/MapaEstacionamiento.
 const Disponibilidad = lazy(() => import('./pages/Disponibilidad.jsx'));
 const RegistrarEstacionamiento = lazy(() => import('./pages/RegistrarEstacionamiento.jsx'));
 const Admin = lazy(() => import('./components/Admin.jsx'));
+const EscanearAcceso = lazy(() => import('./pages/EscanearAcceso.jsx'));
+const PagarEstacionamiento = lazy(() => import('./pages/PagarEstacionamiento.jsx'));
+
+
 
 // NUEVO: Importamos la página de Finanzas
 const Finanzas = lazy(() => import('./components/Finanzas.jsx'));
 const descargarArchivo=lazy(()=>import("./components/descargarArchivo.jsx"))
 // Protector de rutas
+
 function RutaProtegida({ children, allowedRole }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -37,22 +42,61 @@ function RutaProtegida({ children, allowedRole }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
+      setLoading(true);
       setUser(currentUser);
-      if (currentUser) {
-        const snap = await getDoc(doc(db, "users", currentUser.uid));
-        if (snap.exists()) setUserData(snap.data());
+      setUserData(null);
+
+      try {
+        if (currentUser) {
+          const snap = await getDoc(
+            doc(db, "users", currentUser.uid)
+          );
+
+          if (snap.exists()) {
+            setUserData(snap.data());
+          }
+        }
+      } catch (error) {
+        console.error("Error verificando usuario:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
+
     return () => unsub();
   }, []);
 
-  if (loading) return <div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>Verificando...</div>;
-  if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
-  if (allowedRole && userData?.rol !== allowedRole) return <Navigate to="/perfil" replace />;
-  
+  if (loading) {
+    return (
+      <div style={{
+        color: "#00f2fe",
+        textAlign: "center",
+        padding: 40
+      }}>
+        Verificando sesión y permisos...
+      </div>
+    );
+  }
+
+  if (!user || !user.emailVerified) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!userData) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRole && userData.rol !== allowedRole) {
+    return <Navigate to="/perfil" replace />;
+  }
+
+  if (allowedRole === "admin" && userData.estado !== true) {
+    return <Navigate to="/perfil" replace />;
+  }
+
   return children;
 }
+
 
 function App() {
   return (
@@ -77,6 +121,14 @@ function App() {
             <Route path="/reservar" element={<RutaProtegida allowedRole="usuario"><Reservas /></RutaProtegida>} />
             <Route path="/reservas" element={<RutaProtegida allowedRole="usuario"><VerReserva /></RutaProtegida>} />
             <Route path="/historial" element={<RutaProtegida allowedRole="usuario"><Historial /></RutaProtegida>} />
+            <Route
+            path="/pagar-estacionamiento"
+            element={
+              <RutaProtegida allowedRole="usuario">
+                <PagarEstacionamiento />
+              </RutaProtegida>
+            }
+          />
             <Route path="/estacionamientos" element={<RutaProtegida allowedRole="usuario"><Estacionamientos /></RutaProtegida>} />
             <Route path="/disponibilidad" element={<RutaProtegida allowedRole="usuario"><Disponibilidad /></RutaProtegida>} />
             <Route path="/mapa-estacionamiento/:id" element={<RutaProtegida allowedRole="usuario"><MapaEstacionamiento /></RutaProtegida>} />
@@ -89,6 +141,45 @@ function App() {
 
             <Route path="/registrar-estacionamiento" element={<RutaProtegida allowedRole="admin"><RegistrarEstacionamiento /></RutaProtegida>} />
             
+            {/* RUTAS DE ADMINISTRADOR */}
+
+            <Route
+              path="/admin"
+              element={
+                <RutaProtegida allowedRole="admin">
+                  <Admin />
+                </RutaProtegida>
+              }
+            />
+
+            <Route
+              path="/finanzas"
+              element={
+                <RutaProtegida allowedRole="admin">
+                  <Finanzas />
+                </RutaProtegida>
+              }
+            />
+
+            <Route
+              path="/registrar-estacionamiento"
+              element={
+                <RutaProtegida allowedRole="admin">
+                  <RegistrarEstacionamiento />
+                </RutaProtegida>
+              }
+            />
+
+            {/* NUEVA RUTA: ESCANEAR QR */}
+
+            <Route
+              path="/escanear-acceso"
+              element={
+                <RutaProtegida allowedRole="admin">
+                  <EscanearAcceso />
+                </RutaProtegida>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

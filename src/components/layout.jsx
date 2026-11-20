@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
     FaBars, FaCalendarAlt, FaCar, FaCheckCircle, FaClipboardList,
     FaCog, FaHistory, FaMapMarkedAlt, FaParking, FaSignOutAlt,
-    FaTimes, FaUser, FaChartPie 
+    FaTimes, FaUser, FaChartPie, FaQrcode, FaMoneyBillWave
 } from "react-icons/fa";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
@@ -53,12 +53,14 @@ export default function Layout() {
     if (path.includes("perfil")) return "Mi Perfil";
     if (path.includes("reservar")) return "Reservar Espacio";
     if (path.includes("reservas")) return "Mis Reservas";
+    if (path.includes("pagar-estacionamiento")) return "Pagar estacionamiento";
     if (path.includes("historial")) return "Historial";
     if (path.includes("estacionamientos")) return "Estacionamientos";
     if (path.includes("disponibilidad")) return "Disponibilidad";
     if (path.includes("finanzas")) return "Finanzas";
     if (path.includes("registrar-estacionamiento")) return "Registrar Estacionamiento";
     if (path.includes("admin")) return "Panel de Administración";
+    if (path.includes("escanear-acceso")) return "Escanear acceso";
     return "SmartPark IA";
   };
 
@@ -94,6 +96,13 @@ export default function Layout() {
               <Link to="/reservas" className={isActive("/reservas")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaMapMarkedAlt /> Mis Reservas
               </Link>
+              <Link
+                  to="/pagar-estacionamiento"
+                  className={isActive("/pagar-estacionamiento")}
+                  onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}
+              >
+                  <FaMoneyBillWave /> Pagar estacionamiento
+              </Link>
               <Link to="/historial" className={isActive("/historial")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaHistory /> Historial
               </Link>
@@ -117,6 +126,13 @@ export default function Layout() {
               </Link>
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClipboardList /> Registrar Estacionamiento
+              </Link>
+              <Link
+                  to="/escanear-acceso"
+                  className={isActive("/escanear-acceso")}
+                  onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}
+              >
+                  <FaQrcode /> Escanear acceso
               </Link>
             </>
           )}

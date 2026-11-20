@@ -5,8 +5,7 @@ console.log("🔑 Clave Gemini detectada:", process.env.GOOGLE_GENERATIVE_AI_API
 const express = require("express");
 const cors = require("cors");
 const mqtt = require("mqtt");
-const { db, FieldValue } = require("./firebaseAdmin");
-
+const { db, FieldValue, adminAuth } = require("./firebaseAdmin");
 // ==========================================
 // NUEVAS DEPENDENCIAS: REPORTES CON IA (GEMINI)
 // ==========================================
@@ -1087,3 +1086,669 @@ function cerrarServidor() {
 
 process.on("SIGINT", cerrarServidor);
 process.on("SIGTERM", cerrarServidor);
+
+// ==========================================
+// AUTENTICACIÓN DE ADMINISTRADORES
+// ==========================================
+
+async function verificarAdministrador(req, res, next) {
+  try {
+    const authorization = req.headers.authorization || "";
+
+    if (!authorization.startsWith("Bearer ")) {
+      return res.status(401).json({
+        autorizado: false,
+        mensaje: "No se proporcionó un token de autenticación."
+      });
+    }
+
+    const token = authorization.split(" ")[1];
+
+    const decodedToken = await adminAuth.verifyIdToken(token);
+
+    const userRef = db.collection("users").doc(decodedToken.uid);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      return res.status(403).json({
+        autorizado: false,
+        mensaje: "El usuario no está registrado."
+      });
+    }
+
+    const userData = userSnap.data();
+
+    if (userData.rol !== "admin" || userData.estado !== true) {
+      return res.status(403).json({
+        autorizado: false,
+        mensaje: "No tienes permisos para validar accesos."
+      });
+    }
+
+    req.admin = {
+      uid: decodedToken.uid
+    };
+
+    next();
+
+  } catch (error) {
+    console.error("Error de autenticación:", error.message);
+
+    return res.status(401).json({
+      autorizado: false,
+      mensaje: "La sesión no es válida o ha expirado."
+    });
+  }
+}
+
+
+// ==========================================
+// AUTENTICACIÓN DE USUARIOS
+// ==========================================
+
+async function verificarUsuario(req, res, next) {
+  try {
+    const authorization = req.headers.authorization || "";
+
+    if (!authorization.startsWith("Bearer ")) {
+      return res.status(401).json({
+        autorizado: false,
+        mensaje: "No se proporcionó un token de autenticación."
+      });
+    }
+
+    const token = authorization.split(" ")[1];
+
+    const decodedToken = await adminAuth.verifyIdToken(token);
+
+    req.usuario = {
+      uid: decodedToken.uid
+    };
+
+    next();
+
+  } catch (error) {
+    console.error("Error de autenticación del usuario:", error.message);
+
+    return res.status(401).json({
+      autorizado: false,
+      mensaje: "La sesión no es válida o ha expirado."
+    });
+  }
+}
+
+ 
+// ==========================================
+// COTIZAR ESTANCIA ACTIVA
+// ==========================================
+
+app.post("/api/pagos/cotizar", verificarUsuario, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+
+    // Buscar los accesos registrados por este usuario.
+    const consulta = await db
+      .collection("accesos")
+      .where("uid", "==", uid)
+      .get();
+
+    // Filtrar entradas autorizadas, activas y pendientes de pago.
+    const posiblesEstancias = consulta.docs.filter((doc) => {
+      const acceso = doc.data();
+
+      return (
+        acceso.tipo === "entrada" &&
+        acceso.estado === "autorizado" &&
+        acceso.estanciaEstado === "activa" &&
+        acceso.pagoEstado === "pendiente" &&
+        acceso.horaSalida == null &&
+        typeof acceso.reservaId === "string" &&
+        acceso.reservaId.trim() !== ""
+      );
+    });
+
+    // Comprobar que la reserva asociada también esté activa.
+    const resultados = await Promise.all(
+      posiblesEstancias.map(async (doc) => {
+        const acceso = doc.data();
+
+        const reservaRef = db
+          .collection("reservas")
+          .doc(acceso.reservaId);
+
+        const reservaSnap = await reservaRef.get();
+
+        if (!reservaSnap.exists) {
+          return null;
+        }
+
+        const reserva = reservaSnap.data();
+
+        // Ignorar reservas canceladas, finalizadas o inexistentes.
+        if (reserva.estado !== "activa") {
+          return null;
+        }
+
+        return doc;
+      })
+    );
+
+    // Conservar únicamente las estancias válidas.
+    const estanciasActivas = resultados.filter(Boolean);
+
+    console.log(
+      "ESTANCIAS VÁLIDAS PARA COTIZAR:",
+      estanciasActivas.map((doc) => {
+        const acceso = doc.data();
+
+        return {
+          accesoId: doc.id,
+          placa: acceso.placa,
+          estacionamiento: acceso.estacionamiento,
+          espacio: acceso.espacio,
+          reservaId: acceso.reservaId
+        };
+      })
+    );
+
+    if (estanciasActivas.length === 0) {
+      return res.status(404).json({
+        disponible: false,
+        mensaje: "No tienes una estancia activa pendiente de pago."
+      });
+    }
+
+    if (estanciasActivas.length > 1) {
+      return res.status(409).json({
+        disponible: false,
+        mensaje: "Tienes más de una estancia activa. Se requiere identificar cuál deseas pagar."
+      });
+    }
+
+    const documento = estanciasActivas[0];
+    const acceso = documento.data();
+
+    // Obtener la hora de entrada registrada en Firestore.
+    const horaEntrada = acceso.horaEntrada?.toDate?.();
+
+    if (!horaEntrada || Number.isNaN(horaEntrada.getTime())) {
+      return res.status(400).json({
+        disponible: false,
+        mensaje: "La hora de entrada no es válida."
+      });
+    }
+
+    // Validar la tarifa por hora.
+    const tarifaHora = Number(acceso.tarifaHora);
+
+    if (!Number.isFinite(tarifaHora) || tarifaHora <= 0) {
+      return res.status(400).json({
+        disponible: false,
+        mensaje: "No se pudo determinar la tarifa por hora."
+      });
+    }
+
+    // Calcular el tiempo real transcurrido.
+    const ahora = Date.now();
+
+    const milisegundosEstacionado = Math.max(
+      0,
+      ahora - horaEntrada.getTime()
+    );
+
+    const minutosEstacionado =
+      milisegundosEstacionado / 60000;
+
+    // Cobro proporcional al tiempo real, redondeado a centavos.
+    const monto = Number(
+      ((tarifaHora * milisegundosEstacionado) / 3600000).toFixed(2)
+    );
+
+    return res.status(200).json({
+      disponible: true,
+      mensaje: "Cotización calculada correctamente.",
+      cotizacion: {
+        accesoId: documento.id,
+        reservaId: acceso.reservaId,
+        estacionamiento: acceso.estacionamiento,
+        espacio: acceso.espacio,
+        placa: acceso.placa,
+        horaEntrada: horaEntrada.toISOString(),
+        minutosEstacionado: Number(minutosEstacionado.toFixed(2)),
+        tarifaHora,
+        monto,
+        moneda: "MXN"
+      }
+    });
+
+  } catch (error) {
+    console.error("Error al calcular el pago:", error);
+
+    return res.status(500).json({
+      disponible: false,
+      mensaje: "No fue posible calcular el pago."
+    });
+  }
+});
+
+
+// ==========================================
+// CONFIRMAR PAGO Y GENERAR QR DE SALIDA
+// ==========================================
+
+app.post("/api/pagos/confirmar", verificarUsuario, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+    const { accesoId } = req.body;
+
+    if (typeof accesoId !== "string" || !accesoId.trim()) {
+      return res.status(400).json({
+        pagado: false,
+        mensaje: "Debes proporcionar el identificador de la estancia."
+      });
+    }
+
+    const accesoRef = db.collection("accesos").doc(accesoId.trim());
+
+    // Crear referencias para el pago y el QR.
+    const pagoRef = db.collection("pagos").doc();
+    const qrSalidaRef = db.collection("codigos_qr").doc();
+
+    const resultado = await db.runTransaction(async (transaction) => {
+      const accesoSnap = await transaction.get(accesoRef);
+
+      if (!accesoSnap.exists) {
+        throw new Error("ESTANCIA_NO_ENCONTRADA");
+      }
+
+      const acceso = accesoSnap.data();
+
+      if (acceso.uid !== uid) {
+        throw new Error("ESTANCIA_NO_AUTORIZADA");
+      }
+
+      if (
+        acceso.tipo !== "entrada" ||
+        acceso.estanciaEstado !== "activa"
+      ) {
+        throw new Error("ESTANCIA_NO_ACTIVA");
+      }
+
+      if (acceso.pagoEstado === "pagado") {
+        throw new Error("PAGO_YA_REALIZADO");
+      }
+
+      if (acceso.horaSalida) {
+        throw new Error("ESTANCIA_FINALIZADA");
+      }
+
+      const horaEntrada = acceso.horaEntrada?.toDate?.();
+      const tarifaHora = Number(acceso.tarifaHora);
+
+      if (
+        !horaEntrada ||
+        Number.isNaN(horaEntrada.getTime()) ||
+        !Number.isFinite(tarifaHora) ||
+        tarifaHora <= 0
+      ) {
+        throw new Error("DATOS_ESTANCIA_INVALIDOS");
+      }
+
+      // Recalcular el importe en el servidor.
+      const ahora = Date.now();
+
+      const milisegundosEstacionado = Math.max(
+        0,
+        ahora - horaEntrada.getTime()
+      );
+
+      const monto = Number(
+        ((tarifaHora * milisegundosEstacionado) / 3600000).toFixed(2)
+      );
+
+      const referencia = `SP-${pagoRef.id}`;
+
+      // Registrar el pago simulado.
+      transaction.create(pagoRef, {
+        uid,
+        reservaId: acceso.reservaId,
+        accesoId: accesoRef.id,
+        monto,
+        moneda: "MXN",
+        metodo: "simulado",
+        estado: "pagado",
+        referencia,
+        creadoEn: FieldValue.serverTimestamp()
+      });
+
+      // Crear QR exclusivo para la salida.
+      transaction.create(qrSalidaRef, {
+        uid,
+        reservaId: acceso.reservaId,
+        accesoId: accesoRef.id,
+        tipo: "salida",
+        estado: "activo",
+        creadoEn: FieldValue.serverTimestamp(),
+        expiraEn: new Date(Date.now() + 60 * 60 * 1000),
+        escaneadoEn: null
+      });
+
+      // Actualizar la estancia.
+      transaction.update(accesoRef, {
+        pagoEstado: "pagado",
+        pagoId: pagoRef.id,
+        qrSalidaId: qrSalidaRef.id,
+        montoPagado: monto,
+        pagoConfirmadoEn: FieldValue.serverTimestamp()
+      });
+
+      return {
+        pagoId: pagoRef.id,
+        qrSalidaId: qrSalidaRef.id,
+        reservaId: acceso.reservaId,
+        monto,
+        moneda: "MXN",
+        referencia
+      };
+    });
+
+    return res.status(200).json({
+      pagado: true,
+      mensaje: "Pago simulado registrado correctamente.",
+      pago: resultado
+    });
+
+  } catch (error) {
+    console.error("Error al confirmar pago:", error.message);
+
+    const errores = {
+      ESTANCIA_NO_ENCONTRADA: [404, "No encontramos la estancia."],
+      ESTANCIA_NO_AUTORIZADA: [403, "Esta estancia no pertenece a tu usuario."],
+      ESTANCIA_NO_ACTIVA: [409, "La estancia no está activa."],
+      PAGO_YA_REALIZADO: [409, "Esta estancia ya fue pagada."],
+      ESTANCIA_FINALIZADA: [409, "La estancia ya fue finalizada."],
+      DATOS_ESTANCIA_INVALIDOS: [400, "Los datos de la estancia no son válidos."]
+    };
+
+    const [status, mensaje] = errores[error.message] || [
+      500,
+      "No fue posible registrar el pago."
+    ];
+
+    return res.status(status).json({
+      pagado: false,
+      mensaje
+    });
+  }
+});
+
+
+
+// ==========================================
+// VALIDAR QR Y REGISTRAR ACCESO
+// ==========================================
+
+app.post(
+  "/api/accesos/validar-qr",
+  verificarAdministrador,
+  async (req, res) => {
+    try {
+      const { qrId } = req.body;
+
+      if (typeof qrId !== "string" || !qrId.trim()) {
+        return res.status(400).json({
+          autorizado: false,
+          mensaje: "Debes proporcionar un código QR."
+        });
+      }
+
+      const resultado = await db.runTransaction(async (transaction) => {
+        const qrRef = db.collection("codigos_qr").doc(qrId.trim());
+        const qrSnap = await transaction.get(qrRef);
+
+        if (!qrSnap.exists) {
+          throw new Error("QR_NO_ENCONTRADO");
+        }
+
+        const qrData = qrSnap.data();
+
+        if (qrData.estado !== "activo") {
+          throw new Error(
+            qrData.estado === "escaneado"
+              ? "QR_YA_UTILIZADO"
+              : "QR_NO_ACTIVO"
+          );
+        }
+
+        // ==========================================
+        // VALIDAR QR DE SALIDA
+        // ==========================================
+
+        if (qrData.tipo === "salida") {
+
+          if (!qrData.uid || !qrData.accesoId || !qrData.reservaId) {
+            throw new Error("QR_INCOMPLETO");
+          }
+
+          // Verificar que el QR no haya expirado.
+          const expiraSalida = qrData.expiraEn?.toDate?.();
+
+          if (
+            !expiraSalida ||
+            Number.isNaN(expiraSalida.getTime()) ||
+            Date.now() > expiraSalida.getTime()
+          ) {
+            throw new Error("QR_EXPIRADO");
+          }
+
+          // Buscar la estancia relacionada con el QR.
+          const accesoSalidaRef = db
+            .collection("accesos")
+            .doc(qrData.accesoId);
+
+          const accesoSalidaSnap = await transaction.get(accesoSalidaRef);
+
+          if (!accesoSalidaSnap.exists) {
+            throw new Error("ACCESO_NO_ENCONTRADO");
+          }
+
+          const accesoSalida = accesoSalidaSnap.data();
+
+          // Verificar que el QR corresponda a la estancia.
+          if (
+            accesoSalida.uid !== qrData.uid ||
+            accesoSalida.reservaId !== qrData.reservaId ||
+            accesoSalida.qrSalidaId !== qrRef.id
+          ) {
+            throw new Error("QR_SALIDA_NO_COINCIDE");
+          }
+
+          // Verificar que el pago esté confirmado.
+          if (accesoSalida.pagoEstado !== "pagado") {
+            throw new Error("PAGO_NO_CONFIRMADO");
+          }
+
+          // Verificar que la estancia siga activa.
+          if (accesoSalida.estanciaEstado !== "activa") {
+            throw new Error("ESTANCIA_NO_ACTIVA");
+          }
+
+          if (accesoSalida.horaSalida) {
+            throw new Error("ESTANCIA_YA_FINALIZADA");
+          }
+
+          // Consumir el QR de salida.
+          transaction.update(qrRef, {
+            estado: "escaneado",
+            escaneadoEn: FieldValue.serverTimestamp(),
+            escaneadoPor: req.admin.uid
+          });
+
+          // Registrar la hora real de salida.
+          transaction.update(accesoSalidaRef, {
+            horaSalida: FieldValue.serverTimestamp(),
+            estanciaEstado: "finalizada",
+            salidaAutorizadaPor: req.admin.uid,
+            qrSalidaEscaneadoEn: FieldValue.serverTimestamp()
+          });
+
+          return {
+            tipo: "salida",
+            accesoId: accesoSalidaRef.id,
+            reservaId: accesoSalida.reservaId,
+            estacionamiento: accesoSalida.estacionamiento || "",
+            espacio: accesoSalida.espacio || "",
+            placa: accesoSalida.placa || ""
+          };
+        }
+
+
+        if (!qrData.uid || !qrData.reservaId) {
+          throw new Error("QR_INCOMPLETO");
+        }
+
+        const reservaRef = db.collection("reservas").doc(qrData.reservaId);
+        const reservaSnap = await transaction.get(reservaRef);
+
+        if (!reservaSnap.exists) {
+          throw new Error("RESERVA_NO_ENCONTRADA");
+        }
+
+        const reserva = reservaSnap.data();
+
+        if (reserva.estado === "cancelada") {
+          throw new Error("RESERVA_CANCELADA");
+        }
+
+        if (reserva.uid !== qrData.uid) {
+          throw new Error("USUARIO_NO_COINCIDE");
+        }
+
+        const expira = qrData.expiraEn?.toDate?.();
+
+        if (
+          !expira ||
+          Number.isNaN(expira.getTime()) ||
+          Date.now() > expira.getTime()
+        ) {
+          throw new Error("QR_EXPIRADO");
+        }
+
+        const accesoRef = db.collection("accesos").doc();
+
+        // Consumir el QR.
+        transaction.update(qrRef, {
+          estado: "escaneado",
+          escaneadoEn: FieldValue.serverTimestamp(),
+          escaneadoPor: req.admin.uid
+        });
+
+        // Actualizar el registro de reserva.
+        transaction.update(reservaRef, {
+          qrEscaneado: true,
+          qrEscaneadoAt: FieldValue.serverTimestamp()
+        });
+
+        // Crear el registro de entrada.
+        // Calcular tarifa por hora
+const costoReserva = Number(reserva.costoTotal);
+
+const duracionReservaHoras = parseFloat(
+  String(reserva.duracion || "").replace(",", ".")
+);
+
+const tarifaHora =
+  Number.isFinite(costoReserva) &&
+  Number.isFinite(duracionReservaHoras) &&
+  duracionReservaHoras > 0
+    ? Number((costoReserva / duracionReservaHoras).toFixed(2))
+    : null;
+
+        // Crear registro de entrada
+        transaction.create(accesoRef, {
+          qrId: qrRef.id,
+          reservaId: reservaRef.id,
+          uid: qrData.uid,
+          administradorUid: req.admin.uid,
+
+          estacionamiento: reserva.estacionamiento || "",
+          espacio: reserva.espacio || "",
+          placa: reserva.placa || "",
+          marca: reserva.marca || "",
+          modelo: reserva.modelo || "",
+
+          tipo: "entrada",
+          estado: "autorizado",
+          estanciaEstado: "activa",
+
+          horaEntrada: FieldValue.serverTimestamp(),
+          fechaAcceso: FieldValue.serverTimestamp(),
+
+          costoReserva: Number.isFinite(costoReserva)
+            ? costoReserva
+            : null,
+
+          duracionReservaHoras:
+            Number.isFinite(duracionReservaHoras) &&
+            duracionReservaHoras > 0
+              ? duracionReservaHoras
+              : null,
+
+          tarifaHora,
+
+          horaSalida: null,
+          pagoEstado: "pendiente",
+          pagoId: null,
+          qrSalidaId: null
+        });
+
+        return {
+          accesoId: accesoRef.id,
+          reservaId: reservaRef.id,
+          estacionamiento: reserva.estacionamiento || "",
+          espacio: reserva.espacio || "",
+          placa: reserva.placa || "",
+          marca: reserva.marca || "",
+          modelo: reserva.modelo || ""
+        };
+      });
+
+      return res.status(200).json({
+        autorizado: true,
+        mensaje: resultado.tipo === "salida"
+          ? "Salida autorizada correctamente."
+          : "Acceso autorizado correctamente.",
+        acceso: resultado
+      });
+
+    } catch (error) {
+      console.error("Error al validar QR:", error.message);
+
+      const errores = {
+        QR_NO_ENCONTRADO: [404, "El código QR no existe."],
+        QR_YA_UTILIZADO: [409, "Este código QR ya fue utilizado."],
+        QR_NO_ACTIVO: [403, "El código QR no está activo."],
+        QR_INCOMPLETO: [400, "El código QR no contiene los datos necesarios."],
+        RESERVA_NO_ENCONTRADA: [404, "No encontramos la reserva."],
+        RESERVA_CANCELADA: [403, "La reserva fue cancelada."],
+        USUARIO_NO_COINCIDE: [403, "El QR no corresponde al propietario de la reserva."],
+        QR_EXPIRADO: [403, "El código QR ha expirado."],
+        ACCESO_NO_ENCONTRADO: [404, "No encontramos la estancia."],
+        QR_SALIDA_NO_COINCIDE: [403, "El QR de salida no corresponde a esta estancia."],
+        PAGO_NO_CONFIRMADO: [403, "El pago no está confirmado."],
+        ESTANCIA_NO_ACTIVA: [409, "La estancia ya no está activa."],
+        ESTANCIA_YA_FINALIZADA: [409, "Esta estancia ya fue finalizada."],
+      };
+
+      const [status, mensaje] = errores[error.message] || [
+        500,
+        "Ocurrió un error al procesar el acceso."
+      ];
+
+      return res.status(status).json({
+        autorizado: false,
+        mensaje
+      });
+    }
+  }
+);
