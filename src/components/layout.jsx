@@ -1,91 +1,73 @@
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore"; // 👈 Cambiamos getDoc por onSnapshot
+import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  FaBars,
-  FaBuilding,
-  FaCalendarAlt, FaCar,
-  FaChartPie,
-  FaCheckCircle, FaClipboardList,
-  FaClock,
-  FaCog, FaHistory, FaMapMarkedAlt, FaParking, FaSignOutAlt,
-  FaTimes, FaUser
+    FaBars, FaCalendarAlt, FaCar, FaCheckCircle, FaClipboardList,
+    FaCog, FaHistory, FaMapMarkedAlt, FaParking, FaSignOutAlt,
+    FaTimes, FaUser, FaChartPie, FaQrcode, FaMoneyBillWave
 } from "react-icons/fa";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/config.js";
+import AsistenteVirtual from "./AsistenteVirtual"; // <-- Importación
 import "../styles/layout.css";
-import AsistenteVirtual from "./AsistenteVirtual";
-
+ 
 export default function Layout() {
   const [userData, setUserData] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [loading, setLoading] = useState(true);
-  
+ 
   const navigate = useNavigate();
-  const location = useLocation(); 
-
+  const location = useLocation();
+ 
   useEffect(() => {
-    let unsubDoc = null;
-
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
         navigate("/login", { replace: true });
         return;
       }
-      
-      // 👇 Escuchamos cambios en tiempo real
-      unsubDoc = onSnapshot(doc(db, "users", u.uid), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          
-          if (data.estado === false || String(data.estado).toLowerCase() === "false")  {
-            signOut(auth);
-            navigate("/login", { replace: true });
-            return;
-          }
-          
-          setUserData(data);
-        }
+      try {
+        const snap = await getDoc(doc(db, "users", u.uid));
+        if (snap.exists()) setUserData(snap.data());
+      } catch (err) {
+        console.error("Error al obtener rol:", err);
+      } finally {
         setLoading(false);
-      });
+      }
     });
-
-    return () => {
-      unsubAuth();
-      if (unsubDoc) unsubDoc();
-    };
+    return () => unsub();
   }, [navigate]);
-
+ 
   const handleLogout = async () => {
     await signOut(auth);
     navigate("/login", { replace: true });
   };
-
+ 
   if (loading) return <div style={{ color: '#00f2fe', textAlign: 'center', padding: 40 }}>Cargando menú...</div>;
-
+ 
   const isAdmin = userData?.rol === "admin";
   const isActive = (path) => location.pathname === path ? "active" : "";
-
+ 
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes("mis-vehiculos")) return "Mis Vehículos";
     if (path.includes("perfil")) return "Mi Perfil";
     if (path.includes("reservar")) return "Reservar Espacio";
     if (path.includes("reservas")) return "Mis Reservas";
-    if (path.includes("historial-ocupacion")) return "Historial de Ocupación";
+    if (path.includes("pagar-estacionamiento")) return "Pagar estacionamiento";
     if (path.includes("historial")) return "Historial";
-    if (path.includes("crud-estacionamiento")) return "Administrar Estacionamientos";
     if (path.includes("estacionamientos")) return "Estacionamientos";
     if (path.includes("disponibilidad")) return "Disponibilidad";
     if (path.includes("finanzas")) return "Finanzas";
     if (path.includes("registrar-estacionamiento")) return "Registrar Estacionamiento";
     if (path.includes("admin")) return "Panel de Administración";
+    if (path.includes("escanear-acceso")) return "Escanear acceso";
     return "SmartPark IA";
   };
-
+ 
   return (
     <div className={`layout-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
-      
+     
+      {/* ====== SIDEBAR ====== */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-container">
@@ -96,12 +78,13 @@ export default function Layout() {
             <FaTimes />
           </button>
         </div>
-
+ 
         <nav className="sidebar-nav">
           <Link to="/perfil" className={isActive("/perfil")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
             <FaUser /> Mi Perfil
           </Link>
-
+ 
+          {/* --- MENÚ PARA USUARIOS NORMALES --- */}
           {!isAdmin && (
             <>
               <Link to="/mis-vehiculos" className={isActive("/mis-vehiculos")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
@@ -112,6 +95,13 @@ export default function Layout() {
               </Link>
               <Link to="/reservas" className={isActive("/reservas")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaMapMarkedAlt /> Mis Reservas
+              </Link>
+              <Link
+                  to="/pagar-estacionamiento"
+                  className={isActive("/pagar-estacionamiento")}
+                  onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}
+              >
+                  <FaMoneyBillWave /> Pagar estacionamiento
               </Link>
               <Link to="/historial" className={isActive("/historial")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaHistory /> Historial
@@ -124,7 +114,8 @@ export default function Layout() {
               </Link>
             </>
           )}
-
+ 
+          {/* --- MENÚ PARA ADMINISTRADORES --- */}
           {isAdmin && (
             <>
               <Link to="/admin" className={isActive("/admin")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
@@ -136,16 +127,17 @@ export default function Layout() {
               <Link to="/registrar-estacionamiento" className={isActive("/registrar-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
                 <FaClipboardList /> Registrar Estacionamiento
               </Link>
-              <Link to="/crud-estacionamiento" className={isActive("/crud-estacionamiento")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
-                <FaBuilding /> Administrar Estacionamientos
-              </Link>
-              <Link to="/historial-ocupacion" className={isActive("/historial-ocupacion")} onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}>
-                <FaClock /> Historial Ocupación
+              <Link
+                  to="/escanear-acceso"
+                  className={isActive("/escanear-acceso")}
+                  onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}
+              >
+                  <FaQrcode /> Escanear acceso
               </Link>
             </>
           )}
         </nav>
-
+ 
         <div className="sidebar-user">
           <div className="user-info">
             <div className="user-avatar">
@@ -161,16 +153,18 @@ export default function Layout() {
           </button>
         </div>
       </aside>
-
+ 
+      {/* Overlay para móviles */}
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
-
+ 
+      {/* ====== CONTENIDO PRINCIPAL ====== */}
       <div className="main-content">
         <header className="navbar">
           <div className="navbar-left">
             <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
               {sidebarOpen ? <FaTimes /> : <FaBars />}
             </button>
-            
+           
             <div className="navbar-brand-container">
                <div className="navbar-icon" style={{ fontSize: '15px', fontWeight: '900', letterSpacing: '-0.5px' }}>
               SP
@@ -181,7 +175,7 @@ export default function Layout() {
               </div>
             </div>
           </div>
-
+ 
           <div className="navbar-right">
             <span className="admin-badge">
               <span className="pulse-dot"></span>
@@ -189,14 +183,15 @@ export default function Layout() {
             </span>
           </div>
         </header>
-
+ 
         <div className="page-content">
-          <Outlet /> 
+          <Outlet />
         </div>
       </div>
-
+ 
+      {/* ====== ASISTENTE VIRTUAL (SOLO PARA USUARIOS) ====== */}
       {!isAdmin && <AsistenteVirtual />}
-
+ 
     </div>
   );
 }

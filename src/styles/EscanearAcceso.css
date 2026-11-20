@@ -1,0 +1,211 @@
+.acceso-container {
+  min-height: 100vh;
+  background: #000;
+  color: #fff;
+  padding: 30px 20px;
+  font-family: Arial, sans-serif;
+}
+ 
+.acceso-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  max-width: 700px;
+  margin: 0 auto 25px;
+}
+ 
+.acceso-icono {
+  width: 55px;
+  height: 55px;
+  background: #121212;
+  border: 1px solid #333;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+}
+ 
+.acceso-header h1 {
+  font-size: 25px;
+  margin: 0 0 6px;
+}
+ 
+.acceso-header p {
+  color: #aaa;
+  margin: 0;
+}
+ 
+.acceso-panel {
+  max-width: 700px;
+  margin: auto;
+  padding: 25px;
+  background: #121212;
+  border: 1px solid #292929;
+  border-radius: 18px;
+}
+ 
+.acceso-panel-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+ 
+.acceso-panel-titulo h2 {
+  font-size: 18px;
+}
+ 
+.lector-contenedor {
+  min-height: 320px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed #555;
+  border-radius: 15px;
+  background: #080808;
+}
+ 
+#lector-qr {
+  width: 100%;
+}
+ 
+#lector-qr video {
+  width: 100% !important;
+  border-radius: 12px;
+  object-fit: cover;
+}
+ 
+.lector-placeholder {
+  position: absolute;
+  text-align: center;
+  color: #888;
+  pointer-events: none;
+}
+ 
+.lector-placeholder svg {
+  font-size: 55px;
+  margin-bottom: 12px;
+}
+ 
+.acceso-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+ 
+.acceso-acciones button {
+  flex: 1;
+  min-width: 150px;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+ 
+.btn-iniciar {
+  background: #fff;
+  color: #000;
+}
+ 
+.btn-detener {
+  background: #333;
+  color: #fff;
+}
+ 
+.btn-reiniciar {
+  background: #222;
+  color: #fff;
+  border: 1px solid #555 !important;
+}
+ 
+.acceso-procesando,
+.acceso-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  margin-top: 18px;
+  border-radius: 10px;
+}
+ 
+.acceso-procesando {
+  background: #202020;
+  color: #fff;
+}
+ 
+.acceso-error {
+  background: #351414;
+  color: #ff7777;
+}
+ 
+.girar {
+  animation: girar 1s linear infinite;
+}
+ 
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
+ 
+.resultado-autorizado,
+.resultado-denegado {
+  text-align: center;
+  padding: 25px 15px;
+  margin-top: 20px;
+  border-radius: 14px;
+}
+ 
+.resultado-autorizado {
+  background: #10271b;
+  border: 1px solid #1d7543;
+  color: #a8f0c2;
+}
+ 
+.resultado-denegado {
+  background: #301414;
+  border: 1px solid #8c2929;
+  color: #ffaaaa;
+}
+ 
+.resultado-icono {
+  font-size: 45px;
+  margin-bottom: 12px;
+}
+ 
+.datos-acceso {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(0, 0, 0, .3);
+  border-radius: 10px;
+  text-align: left;
+}
+ 
+.datos-acceso p {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+ 
+.acceso-nota {
+  max-width: 700px;
+  margin: 20px auto;
+  color: #888;
+  text-align: center;
+  font-size: 13px;
+}
+ 
+@media (max-width: 600px) {
+  .acceso-container {
+    padding: 20px 12px;
+  }
+ 
+  .acceso-panel {
+    padding: 15px;
+  }
+ 
+  .acceso-header h1 {
+    font-size: 21px;
+  }
+}

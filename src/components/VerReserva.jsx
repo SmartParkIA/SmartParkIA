@@ -3,12 +3,12 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection, query, where, getDocs, doc, updateDoc,
-  addDoc, serverTimestamp, Timestamp,
+  addDoc, serverTimestamp, Timestamp,        // 🆕
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config.js";
 import { QRCodeSVG } from "qrcode.react";
 import DetalleReserva from "./DetalleReserva";
-
+ 
 import {
   FaParking, FaCalendarAlt, FaClock, FaHourglassHalf, FaCar,
   FaCheckCircle, FaTimesCircle, FaSpinner, FaTrash,
@@ -17,136 +17,35 @@ import {
   FaRoute, FaMapMarkedAlt, FaLocationArrow, FaEye,
   FaTicketAlt, FaCompass, FaFire, FaBolt,
 } from "react-icons/fa";
-
+ 
 export default function VerReservas() {
+ 
   const navigate = useNavigate();
-  const location = useLocation();
-  const [initialHandled, setInitialHandled] = useState(false);
-
+const location = useLocation();
+const [initialHandled, setInitialHandled] = useState(false);
   const [user, setUser] = useState(null);
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
-
+ 
   const [modalOpen, setModalOpen] = useState(false);
   const [reservaACancelar, setReservaACancelar] = useState(null);
-
+ 
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [reservaQR, setReservaQR] = useState(null);
-  const [qrActual, setQrActual] = useState(null);
-  const [creandoQR, setCreandoQR] = useState(false);
-
-  const [reservaDetalle, setReservaDetalle] = useState(null);
-
+  const [qrActual, setQrActual] = useState(null);      // 🆕 el doc de Firestore
+const [creandoQR, setCreandoQR] = useState(false);   // 🆕 spinner mientras crea
+ 
+  const [reservaDetalle, setReservaDetalle] = useState(null); // 🆕
+ 
   const [cancelando, setCancelando] = useState(false);
   const [toast, setToast] = useState(null);
-
+ 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
   };
-
-  /* =====================================================
-     🔧 FIX: Helpers de seguridad
-     ===================================================== */
-
-  // Convierte Timestamp / Date / string / number a milisegundos
-  const toMs = (v) => {
-    if (!v) return 0;
-    if (typeof v?.toDate === "function") return v.toDate().getTime();
-    if (v instanceof Date) return v.getTime();
-    if (typeof v === "number") return v;
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? 0 : d.getTime();
-  };
-
-  // 🔧 Devuelve SIEMPRE un string renderizable en JSX
-  const safeStr = (v, fallback = "—") => {
-    if (v === null || v === undefined || v === "") return fallback;
-    if (typeof v === "string") return v;
-    if (typeof v === "number" || typeof v === "boolean") return String(v);
-    if (typeof v?.toDate === "function") {
-      try {
-        return v.toDate().toLocaleString("es-MX");
-      } catch {
-        return fallback;
-      }
-    }
-    if (v instanceof Date) {
-      try {
-        return v.toLocaleString("es-MX");
-      } catch {
-        return fallback;
-      }
-    }
-    // Cualquier otra cosa (objetos, arrays) → fallback
-    return fallback;
-  };
-
-  // 🔧 Sanitiza una reserva completa antes de pasarla a hijos/JSX
-  const sanitizeReserva = (r) => {
-    if (!r || typeof r !== "object") return null;
-    return {
-      ...r,
-      id: r.id,
-      fecha: safeStr(r.fecha, ""),
-      horario: safeStr(r.horario, ""),
-      espacio: safeStr(r.espacio, ""),
-      estacionamiento: safeStr(r.estacionamiento, ""),
-      marca: safeStr(r.marca, ""),
-      modelo: safeStr(r.modelo, ""),
-      placa: safeStr(r.placa, ""),
-      duracion: safeStr(r.duracion, ""),
-      estado: safeStr(r.estado, ""),
-      costoTotal: Number(r.costoTotal) || 0,
-    };
-  };
-
-  // Combina fecha + horario en un Date válido
-  const parseReservaDate = (r) => {
-    try {
-      let base = null;
-
-      if (r.fecha && typeof r.fecha.toDate === "function") {
-        base = r.fecha.toDate();
-      } else if (r.fecha instanceof Date) {
-        base = new Date(r.fecha.getTime());
-      } else {
-        const fechaStr = safeStr(r.fecha, "");
-        const horarioStr = safeStr(r.horario, "");
-
-        if (fechaStr && horarioStr) {
-          const d = new Date(`${fechaStr}T${horarioStr}`);
-          if (!isNaN(d.getTime())) return d;
-        }
-
-        if (fechaStr) {
-          const d = new Date(fechaStr);
-          if (!isNaN(d.getTime())) base = d;
-        }
-
-        if (!base) {
-          const m = fechaStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-          if (m) {
-            const [, dd, mm, yy] = m;
-            const year =
-              yy.length === 2 ? 2000 + parseInt(yy, 10) : parseInt(yy, 10);
-            base = new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10));
-          }
-        }
-      }
-
-      if (base && r.horario) {
-        const tm = safeStr(r.horario, "").match(/(\d{1,2}):(\d{2})/);
-        if (tm) base.setHours(parseInt(tm[1], 10), parseInt(tm[2], 10), 0, 0);
-      }
-
-      return base;
-    } catch {
-      return null;
-    }
-  };
-
+ 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -159,71 +58,45 @@ export default function VerReservas() {
     });
     return () => unsub();
   }, [navigate]);
-
-  /* =====================================================
-     🔧 FIX: Sanitizar la reserva nueva del state
-     ===================================================== */
-  useEffect(() => {
-    if (initialHandled || loading) return;
-    const nueva = location.state?.nuevaReserva;
-    if (!nueva) return;
-
-    const found = reservas.find((r) => r.id === nueva.id);
-
-    if (found) {
-      setReservaDetalle(sanitizeReserva(found));
-    } else {
-      setReservaDetalle(sanitizeReserva(nueva));
-    }
-
-    setInitialHandled(true);
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [reservas, loading, location.state, initialHandled, navigate, location.pathname]);
-
-  /* =====================================================
-     🔧 FIX: orden con toMs (tolera Timestamp de Firestore)
-     ===================================================== */
+  // 🆕 Abrir automáticamente el modal de la reserva recién creada
+useEffect(() => {
+  if (initialHandled || loading) return;
+  const nueva = location.state?.nuevaReserva;
+  if (!nueva) return;
+  const found = reservas.find((r) => r.id === nueva.id) || nueva;
+  setReservaDetalle(found);
+  setInitialHandled(true);
+  // Limpiar el state para que un refresh/back no vuelva a abrirlo
+  navigate(location.pathname, { replace: true, state: {} });
+}, [reservas, loading, location.state, initialHandled, navigate, location.pathname]);
+ 
   const cargarReservas = async (uid) => {
     try {
       const q = query(collection(db, "reservas"), where("uid", "==", uid));
       const snap = await getDocs(q);
       const data = [];
       snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
-
-      data.sort((a, b) => toMs(b.fechaCreacion) - toMs(a.fechaCreacion));
+      data.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
       setReservas(data);
     } catch (err) {
-      console.error("Error cargando reservas:", err);
-      showToast(`Error al cargar: ${err.code || err.message}`, "error");
+      console.error(err);
+      showToast("Error al cargar las reservas", "error");
     }
   };
-
-  /* =====================================================
-     🔧 FIX: clasificar permisivo
-     ===================================================== */
+ 
   const clasificar = (r) => {
-    const estado = safeStr(r.estado, "").toLowerCase().trim();
-
-    if (
-      [
-        "cancelada", "cancelado",
-        "expirada", "expirado",
-        "vencida", "vencido",
-      ].includes(estado)
-    ) {
-      return "cancelada";
-    }
-
-    const inicio = parseReservaDate(r);
-    if (inicio) {
-      const dur = parseFloat(r.duracion) || 0;
+    const estado = (r.estado || "").toLowerCase();
+    if (estado === "cancelada") return "cancelada";
+    if (estado === "activa") {
+      const inicio = new Date(`${r.fecha}T${r.horario}`);
+      const dur = parseInt(r.duracion, 10) || 0;
       const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
       if (fin < new Date()) return "pasada";
+      return "activa";
     }
-
-    return "activa";
+    return "otra";
   };
-
+ 
   const reservasActivas = useMemo(() => {
     return reservas
       .filter((r) => clasificar(r) === "activa")
@@ -231,28 +104,24 @@ export default function VerReservas() {
         const q = busqueda.trim().toLowerCase();
         return (
           !q ||
-          safeStr(r.espacio, "").toLowerCase().includes(q) ||
-          safeStr(r.estacionamiento, "").toLowerCase().includes(q) ||
-          safeStr(r.placa, "").toLowerCase().includes(q) ||
-          safeStr(r.marca, "").toLowerCase().includes(q)
+          (r.espacio || "").toLowerCase().includes(q) ||
+          (r.estacionamiento || "").toLowerCase().includes(q) ||
+          (r.placa || "").toLowerCase().includes(q) ||
+          (r.marca || "").toLowerCase().includes(q)
         );
       });
   }, [reservas, busqueda]);
-
+ 
   const totalActivas = useMemo(
     () => reservas.filter((r) => clasificar(r) === "activa").length,
     [reservas]
   );
-
+ 
   const abrirModalCancelar = (r) => {
-    // 🔧 Sanitizamos antes de abrir el modal
-    setReservaACancelar(sanitizeReserva(r));
+    setReservaACancelar(r);
     setModalOpen(true);
   };
-
-  /* =====================================================
-     🔧 FIX: mostrar error real de Firestore al cancelar
-     ===================================================== */
+ 
   const confirmarCancelacion = async () => {
     if (!reservaACancelar) return;
     setCancelando(true);
@@ -269,96 +138,93 @@ export default function VerReservas() {
       setModalOpen(false);
       setReservaACancelar(null);
     } catch (err) {
-      console.error("Error cancelando:", err);
-      showToast(
-        `No se pudo cancelar (${err.code || "error"}): ${
-          err.message || "revisa reglas de Firestore"
-        }`,
-        "error"
-      );
+      console.error(err);
+      showToast("No se pudo cancelar la reserva.", "error");
     } finally {
       setCancelando(false);
     }
   };
-
-  /* ============================
-     Generar o reutilizar QR
-     ============================ */
-  const crearNuevoQR = async (r) => {
-    const ahora = new Date();
-    const expira = new Date(ahora.getTime() + 60 * 60 * 1000);
-
-    const nuevoQR = {
-      uid: user.uid,
-      reservaId: r.id,
-      estado: "activo",
-      creadoEn: serverTimestamp(),
-      expiraEn: Timestamp.fromDate(expira),
-      escaneadoEn: null,
-    };
-
-    const docRef = await addDoc(collection(db, "codigos_qr"), nuevoQR);
-    setQrActual({
-      id: docRef.id,
-      ...nuevoQR,
-      creadoEn: ahora,
-      expiraEn: expira,
-    });
+/* ============================
+   🆕 Generar o reutilizar QR
+   ============================ */
+const crearNuevoQR = async (r) => {
+  const ahora = new Date();
+  const expira = new Date(ahora.getTime() + 60 * 60 * 1000); // 1 hora
+ 
+  const nuevoQR = {
+    uid: user.uid,
+    reservaId: r.id,
+    estado: "activo",
+    creadoEn: serverTimestamp(),
+    expiraEn: Timestamp.fromDate(expira),
+    escaneadoEn: null,
   };
-
-  const abrirModalQR = async (r) => {
-    // 🔧 Sanitizamos la reserva antes de guardarla para el modal
-    setReservaQR(sanitizeReserva(r));
-    setQrModalOpen(true);
-    setQrActual(null);
-    setCreandoQR(true);
-
-    try {
-      const q = query(
-        collection(db, "codigos_qr"),
-        where("reservaId", "==", r.id),
-        where("uid", "==", user.uid),
-        where("estado", "in", ["activo", "escaneado"])
-      );
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
-        const docSnap = snap.docs[0];
-        const data = { id: docSnap.id, ...docSnap.data() };
-
-        if (data.estado === "activo") {
-          const expira =
-            data.expiraEn?.toDate?.() || new Date(data.expiraEn);
-          if (new Date() > expira) {
-            await updateDoc(doc(db, "codigos_qr", data.id), {
-              estado: "cancelado",
-            });
-            await crearNuevoQR(r);
-          } else {
-            setQrActual(data);
-          }
+ 
+  const docRef = await addDoc(collection(db, "codigos_qr"), nuevoQR);
+  setQrActual({
+    id: docRef.id,
+    ...nuevoQR,
+    creadoEn: ahora,
+    expiraEn: expira,
+  });
+};
+ 
+const abrirModalQR = async (r) => {
+  setReservaQR(r);
+  setQrModalOpen(true);
+  setQrActual(null);
+  setCreandoQR(true);
+ 
+  try {
+    // 🔍 Buscar QR activo o escaneado existente
+    const q = query(
+      collection(db, "codigos_qr"),
+      where("reservaId", "==", r.id),
+      where("uid", "==", user.uid),
+      where("estado", "in", ["activo", "escaneado"])
+    );
+    const snap = await getDocs(q);
+ 
+    if (!snap.empty) {
+      const docSnap = snap.docs[0];
+      const data = { id: docSnap.id, ...docSnap.data() };
+ 
+      // Verificar expiración
+      if (data.estado === "activo") {
+        const expira =
+          data.expiraEn?.toDate?.() || new Date(data.expiraEn);
+        if (new Date() > expira) {
+          await updateDoc(doc(db, "codigos_qr", data.id), {
+            estado: "cancelado",
+          });
+          await crearNuevoQR(r);
         } else {
           setQrActual(data);
         }
       } else {
-        await crearNuevoQR(r);
+        setQrActual(data);
       }
-    } catch (err) {
-      console.error(err);
-      showToast("Error al generar el QR", "error");
-    } finally {
-      setCreandoQR(false);
+    } else {
+      await crearNuevoQR(r);
     }
-  };
-
-  const generarTextoQR = (qr) => {
-    if (!qr) return "";
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/#/ticket?qrId=${encodeURIComponent(qr.id)}`;
-  };
-
+  } catch (err) {
+    console.error(err);
+    showToast("Error al generar el QR", "error");
+  } finally {
+    setCreandoQR(false);
+  }
+};
+ 
+const generarTextoQR = (qr) => {
+  if (!qr) return "";
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/#/ticket?qrId=${encodeURIComponent(qr.id)}`;
+};
+ 
+ 
+ 
   /* =====================================================
-     TILT 3D
+     🎯 TILT 3D siguiendo el cursor
      ===================================================== */
   const handleTilt = (e) => {
     const el = e.currentTarget;
@@ -376,138 +242,134 @@ export default function VerReservas() {
   const handleTiltLeave = (e) => {
     e.currentTarget.style.transform = "";
   };
-
-  /* =====================================================
-     🔧 FIX: renderCard sanitiza todo antes de renderizar
-     ===================================================== */
-  const renderCard = (r, i) => {
-    const s = sanitizeReserva(r);
-
-    return (
-      <div
-        key={s.id}
-        className="reserva-item activa"
-        style={{ animationDelay: `${i * 90}ms` }}
-        onMouseMove={handleTilt}
-        onMouseLeave={handleTiltLeave}
-      >
-        <span className="card-top-glow"></span>
-        <span className="card-spotlight"></span>
-        <span className="card-road"></span>
-
-        <div className="card-header">
-          <div className="badge activa">
-            <span className="badge-ring"></span>
-            <FaCheckCircle className="badge-icon" />
-            ACTIVA
-          </div>
-          <span className="fecha-creacion">
-            <FaCalendarAlt />
-            {r.fechaCreacion
-              ? new Date(toMs(r.fechaCreacion)).toLocaleDateString("es-MX", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })
-              : "—"}
-          </span>
+ 
+  const renderCard = (r, i) => (
+    <div
+      key={r.id}
+      className="reserva-item activa"
+      style={{ animationDelay: `${i * 90}ms` }}
+      onMouseMove={handleTilt}
+      onMouseLeave={handleTiltLeave}
+    >
+      {/* Aro pulsante superior */}
+      <span className="card-top-glow"></span>
+      {/* Brillo que sigue el cursor */}
+      <span className="card-spotlight"></span>
+      {/* Carretera animada inferior */}
+      <span className="card-road"></span>
+ 
+      <div className="card-header">
+        <div className="badge activa">
+          <span className="badge-ring"></span>
+          <FaCheckCircle className="badge-icon" />
+          ACTIVA
         </div>
-
-        <div className="cajon-hero">
-          <div className="cajon-icon">
-            <FaParking />
-            <span className="cajon-icon-ping"></span>
-          </div>
+        <span className="fecha-creacion">
+          <FaCalendarAlt />
+          {r.fechaCreacion
+            ? new Date(r.fechaCreacion).toLocaleDateString("es-MX", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "—"}
+        </span>
+      </div>
+ 
+      <div className="cajon-hero">
+        <div className="cajon-icon">
+          <FaParking />
+          <span className="cajon-icon-ping"></span>
+        </div>
+        <div>
+          <span className="cajon-label">Cajón</span>
+          <h3 className="cajon-value">{r.espacio || "—"}</h3>
+          <p className="cajon-place">
+            <FaMapMarkedAlt /> {r.estacionamiento || "—"}
+          </p>
+        </div>
+        <span className="cajon-shine"></span>
+      </div>
+ 
+      <div className="data-grid">
+        <div className="data-item" style={{ animationDelay: `${i * 90 + 120}ms` }}>
+          <FaCalendarAlt />
           <div>
-            <span className="cajon-label">Cajón</span>
-            <h3 className="cajon-value">{s.espacio || "—"}</h3>
-            <p className="cajon-place">
-              <FaMapMarkedAlt /> {s.estacionamiento || "—"}
-            </p>
-          </div>
-          <span className="cajon-shine"></span>
-        </div>
-
-        <div className="data-grid">
-          <div className="data-item" style={{ animationDelay: `${i * 90 + 120}ms` }}>
-            <FaCalendarAlt />
-            <div>
-              <span>Fecha</span>
-              <p>{s.fecha || "—"}</p>
-            </div>
-          </div>
-          <div className="data-item" style={{ animationDelay: `${i * 90 + 160}ms` }}>
-            <FaClock />
-            <div>
-              <span>Hora</span>
-              <p>{s.horario || "—"}</p>
-            </div>
-          </div>
-          <div className="data-item" style={{ animationDelay: `${i * 90 + 200}ms` }}>
-            <FaHourglassHalf />
-            <div>
-              <span>Duración</span>
-              <p>{s.duracion || "—"}</p>
-            </div>
-          </div>
-          {s.placa && (
-            <div className="data-item" style={{ animationDelay: `${i * 90 + 240}ms` }}>
-              <FaCar />
-              <div>
-                <span>Placa</span>
-                <p className="placa">{s.placa}</p>
-              </div>
-            </div>
-          )}
-
-          <div
-            className="data-item data-item--money"
-            style={{ animationDelay: `${i * 90 + 280}ms` }}
-          >
-            <div className="money-icon">
-              <FaMoneyBillWave />
-              <span className="money-spark"></span>
-            </div>
-            <div>
-              <span style={{ color: "#00f2fe" }}>Costo Total</span>
-              <p className="money-value">${s.costoTotal} MXN</p>
-            </div>
+            <span>Fecha</span>
+            <p>{r.fecha || "—"}</p>
           </div>
         </div>
-
-        {(s.marca || s.modelo) && (
-          <div className="vehiculo-row">
+        <div className="data-item" style={{ animationDelay: `${i * 90 + 160}ms` }}>
+          <FaClock />
+          <div>
+            <span>Hora</span>
+            <p>{r.horario || "—"}</p>
+          </div>
+        </div>
+        <div className="data-item" style={{ animationDelay: `${i * 90 + 200}ms` }}>
+          <FaHourglassHalf />
+          <div>
+            <span>Duración</span>
+            <p>{r.duracion || "—"}</p>
+          </div>
+        </div>
+        {r.placa && (
+          <div className="data-item" style={{ animationDelay: `${i * 90 + 240}ms` }}>
             <FaCar />
-            <span>
-              {s.marca}
-              {s.modelo && ` · ${s.modelo}`}
-            </span>
+            <div>
+              <span>Placa</span>
+              <p className="placa">{r.placa}</p>
+            </div>
           </div>
         )}
-
-        <button
-          className="btn-route"
-          onClick={() => setReservaDetalle(sanitizeReserva(r))}
-          title="Ver ruta en el mapa"
+ 
+        <div
+          className="data-item data-item--money"
+          style={{ animationDelay: `${i * 90 + 280}ms` }}
         >
-          <FaRoute className="btn-route-icon" />
-          <span>Cómo llegar</span>
-          <FaLocationArrow className="btn-route-arrow" />
-          <span className="btn-route-shimmer"></span>
-        </button>
-
-        <div className="card-actions">
-          <button className="btn-qr" onClick={() => abrirModalQR(r)}>
-            <FaQrcode /> Ver QR
-          </button>
-          <button className="btn-cancelar" onClick={() => abrirModalCancelar(r)}>
-            <FaTrash /> Cancelar
-          </button>
+          <div className="money-icon">
+            <FaMoneyBillWave />
+            <span className="money-spark"></span>
+          </div>
+          <div>
+            <span style={{ color: "#00f2fe" }}>Costo Total</span>
+            <p className="money-value">${r.costoTotal || 0} MXN</p>
+          </div>
         </div>
       </div>
-    );
-  };
-
+ 
+      {(r.marca || r.modelo) && (
+        <div className="vehiculo-row">
+          <FaCar />
+          <span>
+            {r.marca} {r.modelo && `· ${r.modelo}`}
+          </span>
+        </div>
+      )}
+ 
+      {/* 🆕 Botón Cómo llegar (arriba, ancho completo) */}
+      <button
+        className="btn-route"
+        onClick={() => setReservaDetalle(r)}
+        title="Ver ruta en el mapa"
+      >
+        <FaRoute className="btn-route-icon" />
+        <span>Cómo llegar</span>
+        <FaLocationArrow className="btn-route-arrow" />
+        <span className="btn-route-shimmer"></span>
+      </button>
+ 
+      <div className="card-actions">
+        <button className="btn-qr" onClick={() => abrirModalQR(r)}>
+          <FaQrcode /> Ver QR
+        </button>
+        <button className="btn-cancelar" onClick={() => abrirModalCancelar(r)}>
+          <FaTrash /> Cancelar
+        </button>
+      </div>
+    </div>
+  );
+ 
   if (loading) {
     return (
       <div className="vr-page center-state">
@@ -521,9 +383,10 @@ export default function VerReservas() {
       </div>
     );
   }
-
+ 
   return (
     <div className="vr-page">
+      {/* Fondo decorativo */}
       <div className="bg-deco">
         <span className="deco-particle p1"></span>
         <span className="deco-particle p2"></span>
@@ -533,7 +396,7 @@ export default function VerReservas() {
         <span className="deco-ring r1"></span>
         <span className="deco-ring r2"></span>
       </div>
-
+ 
       <div className="container">
         <header className="vr-header">
           <div>
@@ -564,7 +427,7 @@ export default function VerReservas() {
             </Link>
           </div>
         </header>
-
+ 
         <div className="filters">
           <div className="search-box">
             <FaSearch className="search-icon" />
@@ -585,7 +448,7 @@ export default function VerReservas() {
             )}
           </div>
         </div>
-
+ 
         {reservasActivas.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">
@@ -614,199 +477,199 @@ export default function VerReservas() {
           </div>
         )}
       </div>
-
-      {/* ============ MODAL QR ============ */}
-      {qrModalOpen && reservaQR && (
-        <div className="modal-overlay" onClick={() => setQrModalOpen(false)}>
-          <div
-            className="modal modal-qr"
-            onClick={(e) => e.stopPropagation()}
-            style={{ padding: "30px", maxWidth: "360px" }}
-          >
-            <button
-              className="modal-close"
-              onClick={() => setQrModalOpen(false)}
-              aria-label="Cerrar"
-            >
-              <FaTimesCircle />
-            </button>
-
-            <div className="qr-header-icon">
-              <FaTicketAlt />
-              <span className="qr-header-ping"></span>
-            </div>
-
-            <h3 style={{ marginBottom: "5px" }}>Tu Código QR</h3>
-            <p style={{ fontSize: "13px", marginBottom: "16px" }}>
-              Escanéalo con la cámara de tu celular.
-            </p>
-
-            {qrActual && (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "5px 12px",
-                  marginBottom: "14px",
-                  borderRadius: "999px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  letterSpacing: ".4px",
-                  textTransform: "uppercase",
-                  background:
-                    qrActual.estado === "activo"
-                      ? "rgba(16,185,129,.15)"
-                      : qrActual.estado === "escaneado"
-                      ? "rgba(0,242,254,.15)"
-                      : "rgba(239,68,68,.15)",
-                  color:
-                    qrActual.estado === "activo"
-                      ? "#10b981"
-                      : qrActual.estado === "escaneado"
-                      ? "#00f2fe"
-                      : "#ef4444",
-                  border: `1px solid ${
-                    qrActual.estado === "activo"
-                      ? "rgba(16,185,129,.4)"
-                      : qrActual.estado === "escaneado"
-                      ? "rgba(0,242,254,.4)"
-                      : "rgba(239,68,68,.4)"
-                  }`,
-                }}
-              >
-                {qrActual.estado === "activo" && <FaCheckCircle />}
-                {qrActual.estado === "escaneado" && <FaQrcode />}
-                {qrActual.estado === "cancelado" && <FaExclamationTriangle />}
-                {qrActual.estado === "activo" && "Válido por 1 hora"}
-                {qrActual.estado === "escaneado" && "Ya escaneado"}
-                {qrActual.estado === "cancelado" && "Expirado"}
-              </div>
-            )}
-
-            {creandoQR ? (
-              <div
-                style={{
-                  width: "240px",
-                  height: "240px",
-                  margin: "0 auto 15px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "#fff",
-                  borderRadius: "12px",
-                }}
-              >
-                <FaSpinner className="spin" size={32} color="#00f2fe" />
-              </div>
-            ) : qrActual ? (
-              <div
-                style={{
-                  position: "relative",
-                  background: "#ffffff",
-                  padding: "15px",
-                  borderRadius: "12px",
-                  display: "flex",
-                  justifyContent: "center",
-                  marginBottom: "15px",
-                  boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
-                }}
-              >
-                <QRCodeSVG
-                  value={generarTextoQR(qrActual)}
-                  size={240}
-                  bgColor={"#ffffff"}
-                  fgColor={"#000000"}
-                  level={"L"}
-                  includeMargin={true}
-                />
-                {qrActual.estado !== "activo" && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      background: "rgba(15,23,42,.85)",
-                      borderRadius: "12px",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color:
-                        qrActual.estado === "escaneado" ? "#00f2fe" : "#ef4444",
-                      fontSize: "14px",
-                      fontWeight: 800,
-                      gap: "10px",
-                      textAlign: "center",
-                      padding: "20px",
-                    }}
-                  >
-                    {qrActual.estado === "escaneado" ? (
-                      <>
-                        <FaQrcode size={32} />
-                        <span>Este QR ya fue escaneado</span>
-                      </>
-                    ) : (
-                      <>
-                        <FaExclamationTriangle size={32} />
-                        <span>Este QR expiró</span>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            <div
-              style={{
-                background: "rgba(0,0,0,0.2)",
-                padding: "12px",
-                borderRadius: "10px",
-                textAlign: "left",
-                fontSize: "13px",
-                marginBottom: "20px",
-              }}
-            >
-              <p style={{ margin: "0 0 5px", color: "#00f2fe" }}>
-                <strong>
-                  <FaBolt style={{ marginRight: 4 }} /> Resumen de Reserva:
-                </strong>
-              </p>
-              <p style={{ margin: "0 0 3px", color: "#e2e8f0" }}>
-                <FaParking style={{ color: "#00f2fe", marginRight: 6 }} />
-                Cajón: {reservaQR.espacio || "—"}
-              </p>
-              <p style={{ margin: "0 0 3px", color: "#e2e8f0" }}>
-                <FaCar style={{ color: "#00f2fe", marginRight: 6 }} />
-                Placa: {reservaQR.placa || "—"}
-              </p>
-              <p
-                style={{
-                  margin: "5px 0 0",
-                  color: "#00f2fe",
-                  fontWeight: "bold",
-                }}
-              >
-                <FaMoneyBillWave style={{ marginRight: 6 }} />
-                Total Pagado: ${reservaQR.costoTotal} MXN
-              </p>
-            </div>
-
-            <button
-              className="btn-modal btn-modal-cancel"
-              onClick={() => setQrModalOpen(false)}
-              style={{
-                width: "100%",
-                background: "#00f2fe",
-                color: "#0f172a",
-                border: "none",
-              }}
-            >
-              Cerrar
-            </button>
-          </div>
+{/* ============ MODAL QR ============ */}
+{qrModalOpen && reservaQR && (
+  <div className="modal-overlay" onClick={() => setQrModalOpen(false)}>
+    <div
+      className="modal modal-qr"
+      onClick={(e) => e.stopPropagation()}
+      style={{ padding: "30px", maxWidth: "360px" }}
+    >
+      <button
+        className="modal-close"
+        onClick={() => setQrModalOpen(false)}
+        aria-label="Cerrar"
+      >
+        <FaTimesCircle />
+      </button>
+ 
+      <div className="qr-header-icon">
+        <FaTicketAlt />
+        <span className="qr-header-ping"></span>
+      </div>
+ 
+      <h3 style={{ marginBottom: "5px" }}>Tu Código QR</h3>
+      <p style={{ fontSize: "13px", marginBottom: "16px" }}>
+        Escanéalo con la cámara de tu celular.
+      </p>
+ 
+      {/* Estado del QR */}
+      {qrActual && (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "5px 12px",
+            marginBottom: "14px",
+            borderRadius: "999px",
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: ".4px",
+            textTransform: "uppercase",
+            background:
+              qrActual.estado === "activo"
+                ? "rgba(16,185,129,.15)"
+                : qrActual.estado === "escaneado"
+                ? "rgba(0,242,254,.15)"
+                : "rgba(239,68,68,.15)",
+            color:
+              qrActual.estado === "activo"
+                ? "#10b981"
+                : qrActual.estado === "escaneado"
+                ? "#00f2fe"
+                : "#ef4444",
+            border: `1px solid ${
+              qrActual.estado === "activo"
+                ? "rgba(16,185,129,.4)"
+                : qrActual.estado === "escaneado"
+                ? "rgba(0,242,254,.4)"
+                : "rgba(239,68,68,.4)"
+            }`,
+          }}
+        >
+          {qrActual.estado === "activo" && <FaCheckCircle />}
+          {qrActual.estado === "escaneado" && <FaQrcode />}
+          {qrActual.estado === "cancelado" && <FaExclamationTriangle />}
+          {qrActual.estado === "activo" && "Válido por 1 hora"}
+          {qrActual.estado === "escaneado" && "Ya escaneado"}
+          {qrActual.estado === "cancelado" && "Expirado"}
         </div>
       )}
-
+ 
+      {creandoQR ? (
+        <div
+          style={{
+            width: "240px",
+            height: "240px",
+            margin: "0 auto 15px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#fff",
+            borderRadius: "12px",
+          }}
+        >
+          <FaSpinner className="spin" size={32} color="#00f2fe" />
+        </div>
+      ) : qrActual ? (
+        <div
+          style={{
+            position: "relative",
+            background: "#ffffff",
+            padding: "15px",
+            borderRadius: "12px",
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: "15px",
+            boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+          }}
+        >
+          <QRCodeSVG
+            value={generarTextoQR(qrActual)}
+            size={240}
+            bgColor={"#ffffff"}
+            fgColor={"#000000"}
+            level={"L"}
+            includeMargin={true}
+          />
+          {qrActual.estado !== "activo" && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "rgba(15,23,42,.85)",
+                borderRadius: "12px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color:
+                  qrActual.estado === "escaneado" ? "#00f2fe" : "#ef4444",
+                fontSize: "14px",
+                fontWeight: 800,
+                gap: "10px",
+                textAlign: "center",
+                padding: "20px",
+              }}
+            >
+              {qrActual.estado === "escaneado" ? (
+                <>
+                  <FaQrcode size={32} />
+                  <span>Este QR ya fue escaneado</span>
+                </>
+              ) : (
+                <>
+                  <FaExclamationTriangle size={32} />
+                  <span>Este QR expiró</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
+ 
+      <div
+        style={{
+          background: "rgba(0,0,0,0.2)",
+          padding: "12px",
+          borderRadius: "10px",
+          textAlign: "left",
+          fontSize: "13px",
+          marginBottom: "20px",
+        }}
+      >
+        <p style={{ margin: "0 0 5px", color: "#00f2fe" }}>
+          <strong>
+            <FaBolt style={{ marginRight: 4 }} /> Resumen de Reserva:
+          </strong>
+        </p>
+        <p style={{ margin: "0 0 3px", color: "#e2e8f0" }}>
+          <FaParking style={{ color: "#00f2fe", marginRight: 6 }} />
+          Cajón: {reservaQR.espacio}
+        </p>
+        <p style={{ margin: "0 0 3px", color: "#e2e8f0" }}>
+          <FaCar style={{ color: "#00f2fe", marginRight: 6 }} />
+          Placa: {reservaQR.placa}
+        </p>
+        <p
+          style={{
+            margin: "5px 0 0",
+            color: "#00f2fe",
+            fontWeight: "bold",
+          }}
+        >
+          <FaMoneyBillWave style={{ marginRight: 6 }} />
+          Total Pagado: ${reservaQR.costoTotal || 0} MXN
+        </p>
+      </div>
+ 
+      <button
+        className="btn-modal btn-modal-cancel"
+        onClick={() => setQrModalOpen(false)}
+        style={{
+          width: "100%",
+          background: "#00f2fe",
+          color: "#0f172a",
+          border: "none",
+        }}
+      >
+        Cerrar
+      </button>
+    </div>
+  </div>
+)}
+     
       {/* ============ MODAL CANCELAR ============ */}
       {modalOpen && reservaACancelar && (
         <div
@@ -820,10 +683,9 @@ export default function VerReservas() {
             </div>
             <h3>¿Cancelar Reserva?</h3>
             <p>
-              Vas a liberar el cajón{" "}
-              <strong>{reservaACancelar.espacio || "—"}</strong> del{" "}
-              {reservaACancelar.fecha || "—"} a las{" "}
-              {reservaACancelar.horario || "—"}. Otra persona podría ocuparlo.
+              Vas a liberar el cajón <strong>{reservaACancelar.espacio}</strong> del{" "}
+              {reservaACancelar.fecha} a las {reservaACancelar.horario}. Otra
+              persona podría ocuparlo.
             </p>
             <div className="modal-buttons">
               <button
@@ -852,15 +714,15 @@ export default function VerReservas() {
           </div>
         </div>
       )}
-
-      {/* ============ MODAL DETALLE / RUTA ============ */}
+ 
+      {/* ============ 🆕 MODAL DETALLE / RUTA ============ */}
       {reservaDetalle && (
         <DetalleReserva
           reserva={reservaDetalle}
           onClose={() => setReservaDetalle(null)}
         />
       )}
-
+ 
       {/* ============ TOAST ============ */}
       {toast && (
         <div className={`toast ${toast.type}`}>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
-  doc, getDoc, updateDoc, serverTimestamp,
+  doc, getDoc
 } from "firebase/firestore";
 import { db } from "../firebase/config.js";
 import {
@@ -9,15 +9,14 @@ import {
   FaParking, FaBuilding, FaArrowRight, FaCalendarAlt, FaClock,
   FaCar, FaQrcode, FaRoute,
 } from "react-icons/fa";
-
+ 
 export default function Ticket() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState("loading"); // loading | ready | already | expired | error
   const [qr, setQr] = useState(null);
   const [reserva, setReserva] = useState(null);
   const [error, setError] = useState(null);
-  const [showLlegada, setShowLlegada] = useState(false);
-
+ 
   useEffect(() => {
     const qrId = searchParams.get("qrId");
     if (!qrId) {
@@ -25,76 +24,88 @@ export default function Ticket() {
       setStatus("error");
       return;
     }
-
+ 
     let cancel = false;
-
-    const validar = async () => {
-      try {
-        const qrRef = doc(db, "codigos_qr", qrId);
-        const qrSnap = await getDoc(qrRef);
-
-        if (!qrSnap.exists()) {
-          setError("No encontramos ese código QR");
-          setStatus("error");
-          return;
-        }
-
-        const qrData = { id: qrSnap.id, ...qrSnap.data() };
-        if (cancel) return;
-        setQr(qrData);
-
-        // 🔒 Verificar estado
-        if (qrData.estado === "escaneado") {
-          setStatus("already");
-          return;
-        }
-
-        if (qrData.estado === "cancelado") {
-          setStatus("expired");
-          return;
-        }
-
-        // ⏱️ Verificar expiración manual (por si el cron no lo ha cancelado)
-        const expira = qrData.expiraEn?.toDate?.() || new Date(qrData.expiraEn);
-        if (new Date() > expira) {
-          await updateDoc(qrRef, { estado: "cancelado" });
-          setStatus("expired");
-          return;
-        }
-
-        // ✅ Marcar como escaneado
-        await updateDoc(qrRef, {
-          estado: "escaneado",
-          escaneadoEn: serverTimestamp(),
-        });
-
-        // 📥 Cargar la reserva
-        const reservaSnap = await getDoc(doc(db, "reservas", qrData.reservaId));
-        if (reservaSnap.exists()) {
-          setReserva({ id: reservaSnap.id, ...reservaSnap.data() });
-        }
-
-        if (cancel) return;
-        setStatus("ready");
-
-        // 🎬 Mostrar modal de llegada con retraso para animación
-        setTimeout(() => {
-          if (!cancel) setShowLlegada(true);
-        }, 700);
-      } catch (err) {
-        console.error(err);
-        if (cancel) return;
-        setError(err.message);
-        setStatus("error");
-      }
+ 
+   
+const validar = async () => {
+  try {
+    const qrRef = doc(db, "codigos_qr", qrId);
+    const qrSnap = await getDoc(qrRef);
+ 
+    if (!qrSnap.exists()) {
+      setError("No encontramos ese código QR");
+      setStatus("error");
+      return;
+    }
+ 
+    const qrData = { id: qrSnap.id, ...qrSnap.data() };
+ 
+    if (cancel) return;
+    setQr(qrData);
+ 
+    if (qrData.estado === "escaneado") {
+      setStatus("already");
+      return;
+    }
+ 
+    if (qrData.estado === "cancelado") {
+      setStatus("expired");
+      return;
+    }
+ 
+    const expira = qrData.expiraEn?.toDate?.()
+      || new Date(qrData.expiraEn);
+ 
+    if (!expira || Number.isNaN(expira.getTime()) || Date.now() > expira.getTime()) {
+      setStatus("expired");
+      return;
+    }
+ 
+    // Consultar la reserva sin modificar el QR.
+    const reservaSnap = await getDoc(
+      doc(db, "reservas", qrData.reservaId)
+    );
+ 
+    if (!reservaSnap.exists()) {
+      setError("No encontramos la reserva asociada a este QR");
+      setStatus("error");
+      return;
+    }
+ 
+    const reservaData = {
+      id: reservaSnap.id,
+      ...reservaSnap.data()
     };
-
+ 
+    if (reservaData.estado === "cancelada") {
+      setError("Esta reserva fue cancelada");
+      setStatus("error");
+      return;
+    }
+ 
+    if (cancel) return;
+ 
+    setReserva(reservaData);
+    setStatus("ready");
+ 
+  } catch (err) {
+    console.error(err);
+ 
+    if (cancel) return;
+ 
+    setError(err.message);
+    setStatus("error");
+  }
+};
+ 
+ 
     validar();
     return () => {
       cancel = true;
     };
   }, [searchParams]);
-
+ 
   return (
     <div className="tk-page">
       <div className="tk-bg">
@@ -102,7 +113,7 @@ export default function Ticket() {
         <div className="tk-blob b2"></div>
         <div className="tk-grid"></div>
       </div>
-
+ 
       <div className="tk-container">
         {status === "loading" && (
           <div className="tk-card tk-card--loading">
@@ -116,7 +127,7 @@ export default function Ticket() {
             <p>Estamos revisando tu reserva con el sistema.</p>
           </div>
         )}
-
+ 
         {status === "error" && (
           <div className="tk-card tk-card--error">
             <div className="tk-icon tk-icon--error">
@@ -130,7 +141,7 @@ export default function Ticket() {
             </Link>
           </div>
         )}
-
+ 
         {status === "already" && (
           <div className="tk-card tk-card--warn">
             <div className="tk-icon tk-icon--warn">
@@ -151,7 +162,7 @@ export default function Ticket() {
             </Link>
           </div>
         )}
-
+ 
         {status === "expired" && (
           <div className="tk-card tk-card--warn">
             <div className="tk-icon tk-icon--warn">
@@ -168,7 +179,7 @@ export default function Ticket() {
             </Link>
           </div>
         )}
-
+ 
         {status === "ready" && reserva && (
           <div className="tk-card tk-card--ready">
             <div className="tk-icon tk-icon--success">
@@ -176,11 +187,11 @@ export default function Ticket() {
               <span className="tk-icon-ring"></span>
               <span className="tk-icon-ring tk-icon-ring--2"></span>
             </div>
-            <h1>¡Llegaste!</h1>
+            <h1>¡Tu boleto está listo!</h1>
             <p className="tk-subtitle">
-              <FaQrcode /> Código QR validado correctamente
+              <FaQrcode /> QR listo para presentar al encargado
             </p>
-
+           
             <div className="tk-info">
               <div className="tk-info-row">
                 <FaBuilding />
@@ -220,49 +231,15 @@ export default function Ticket() {
                 </div>
               </div>
             </div>
-
+ 
             <Link to="/reservas" className="tk-btn tk-btn--ghost">
               <FaRoute /> Ver mi reserva
             </Link>
           </div>
         )}
       </div>
-
-      {/* ============ MODAL DE LLEGADA ============ */}
-      {showLlegada && (
-        <div
-          className="tk-modal-overlay"
-          onClick={() => setShowLlegada(false)}
-        >
-          <div
-            className="tk-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="tk-modal-icon">
-              <FaCheckCircle />
-              <span className="tk-modal-ring"></span>
-              <span className="tk-modal-ring tk-modal-ring--2"></span>
-            </div>
-            <h2>¡Has llegado al estacionamiento!</h2>
-            <p className="tk-modal-sub">
-              {reserva?.estacionamiento || "Estacionamiento"}
-            </p>
-
-            <div className="tk-modal-confetti">
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-            </div>
-
-            <button
-              className="tk-btn"
-              onClick={() => setShowLlegada(false)}
-            >
-              <FaCheckCircle /> Entendido
-            </button>
-          </div>
-        </div>
-      )}
-
+ 
+     
       {/* ============ ESTILOS ============ */}
       <style>{`
         @keyframes tkFadeIn    { from { opacity: 0; } to { opacity: 1; } }
@@ -278,7 +255,7 @@ export default function Ticket() {
         @keyframes tkModalIn   { 0% { opacity: 0; transform: scale(.7) translateY(40px); } 60% { opacity: 1; transform: scale(1.04) translateY(-5px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes tkConfetti  { 0% { transform: translateY(-30px) rotate(0); opacity: 1; } 100% { transform: translateY(80px) rotate(360deg); opacity: 0; } }
         @keyframes tkPopupRing { 0% { transform: scale(.8); opacity: .9; } 100% { transform: scale(2.4); opacity: 0; } }
-
+ 
         * { box-sizing: border-box; }
         .tk-page {
           min-height: 100vh;
@@ -303,7 +280,7 @@ export default function Ticket() {
           mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
           -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
         }
-
+ 
         .tk-container { width: 100%; max-width: 520px; position: relative; z-index: 1; }
         .tk-card {
           background: #1e293b;
@@ -319,7 +296,7 @@ export default function Ticket() {
         .tk-card h1 { color: #e2e8f0; font-size: 26px; margin: 0 0 8px; letter-spacing: -0.3px; }
         .tk-card h2 { color: #e2e8f0; font-size: 20px; margin: 16px 0 8px; }
         .tk-card p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
-
+ 
         .tk-icon {
           position: relative;
           width: 84px; height: 84px;
@@ -341,7 +318,7 @@ export default function Ticket() {
           pointer-events: none;
         }
         .tk-icon-ring--2 { animation-delay: 1s; }
-
+ 
         .tk-subtitle {
           display: inline-flex; align-items: center; gap: 6px;
           color: #00f2fe !important;
@@ -353,7 +330,7 @@ export default function Ticket() {
           margin-top: 6px !important;
           margin-bottom: 20px !important;
         }
-
+ 
         .tk-info { display: grid; gap: 10px; text-align: left; margin: 20px 0; }
         .tk-info-row {
           display: flex; align-items: center; gap: 12px;
@@ -372,7 +349,7 @@ export default function Ticket() {
         .tk-info-row span { display: block; color: #64748b; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
         .tk-info-row p { margin: 2px 0 0; color: #e2e8f0; font-size: 14px; font-weight: 600; }
         .tk-hl { color: #00f2fe !important; letter-spacing: 1px; }
-
+ 
         .tk-btn {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           width: 100%; padding: 13px;
@@ -386,13 +363,13 @@ export default function Ticket() {
         }
         .tk-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,242,254,.4); }
         .tk-btn--ghost { background: rgba(0,242,254,.1); color: #00f2fe; border: 1px solid rgba(0,242,254,.35); }
-
+ 
         .tk-orbit { position: relative; width: 90px; height: 90px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; }
         .tk-orbit-ring { position: absolute; inset: 0; border: 2px solid transparent; border-top-color: #00f2fe; border-radius: 50%; animation: tkOrbit 1.2s linear infinite; }
         .tk-orbit-ring:nth-child(2) { inset: 10px; border-top-color: #4facfe; animation-duration: .9s; animation-direction: reverse; }
         .tk-orbit-ring:nth-child(3) { inset: 20px; border-top-color: #8b5cf6; animation-duration: .7s; }
         .tk-spin { animation: tkSpin 1s linear infinite; }
-
+ 
         /* ============ MODAL DE LLEGADA ============ */
         .tk-modal-overlay {
           position: fixed; inset: 0;
