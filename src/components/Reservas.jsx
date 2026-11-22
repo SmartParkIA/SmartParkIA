@@ -1,0 +1,1599 @@
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc, // <-- Nuevo import para buscar por ID
+} from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import {
+  FaArrowLeft,
+  FaBolt,
+  FaBuilding,
+  FaCalendarCheck,
+  FaCamera,
+  FaCar,
+  FaCheckCircle,
+  FaCoins,
+  FaExclamationTriangle,
+  FaFire,
+  FaHandHoldingUsd,
+  FaHourglassHalf,
+  FaInfoCircle,
+  FaKey,
+  FaLightbulb,
+  FaMagic,
+  FaMapMarkedAlt,
+  FaMapPin,
+  FaParking,
+  FaReceipt,
+  FaRocket,
+  FaShieldAlt,
+  FaSpinner,
+  FaStopwatch,
+  FaTicketAlt,
+  FaUser
+} from "react-icons/fa";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { auth, db } from "../firebase/config.js";
+import { getVehiculos } from "../services/userService";
+
+const MARCAS = ["Nissan", "Chevrolet", "Volkswagen", "Toyota", "Ford", "Honda", "Kia", "Mazda", "Hyundai", "SEAT"];
+const PRECIO_HORA = 50;
+const CAPACIDAD_TOTAL = 50;
+const BUFFER_MINUTOS = 15; // 🕒 margen real entre reservas
+
+const PALABRAS_PROHIBIDAS = [
+  "puta", "puto", "putita", "putito", "mierda", "pendejo", "pendeja",
+  "cabron", "cabrón", "verga", "chinga", "chingar", "chingada", "joder",
+  "jodete", "jódete", "culo", "pedo", "mamon", "mamón", "pinche", "culero",
+  "zorra", "perra", "idiota", "estupido", "estúpido", "estupida", "estúpida",
+  "tonto", "tonta", "imbecil", "imbécil", "gilipollas", "marica", "maricon",
+  "maricón", "wey", "güey", "mamada", "mamadas", "coño", "cojones", "hostia",
+  "follar", "follador", "sudaca", "culiao", "cagada", "cagar", "cagon", "cagón",
+  "ojete", "pito", "pitos", "chupar", "chupala", "chupalo", "concha", "conchudo",
+  "pelotudo", "boludo", "boluda", "garcha", "garchar", "hijueputa", "hdp", "ptm",
+  "shit", "bitch", "asshole", "fuck", "fucking", "dick", "pussy", "whore", "ass"
+];
+
+const normalizarTexto = (str = "") =>
+  String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const contieneGroseria = (texto = "") => {
+  const limpio = normalizarTexto(texto);
+  return PALABRAS_PROHIBIDAS.some((p) => {
+    const pLimpia = normalizarTexto(p);
+    const re = new RegExp(`(?:^|[^a-z])${pLimpia}`, "i");
+    return re.test(limpio);
+  });
+};
+
+const esSpamTexto = (texto = "") => {
+  const t = String(texto).trim();
+  if (t.length < 3) return false;
+  const compacto = normalizarTexto(t).replace(/[\s\-\.]/g, "");
+  if (!compacto) return true;
+  if (/(.{2,4})\1{2,}/i.test(compacto)) return true;
+  const unicos = new Set(compacto).size;
+  if (compacto.length >= 4 && unicos <= 2) return true;
+  if (/^\d+$/.test(compacto)) return true;
+  return false;
+};
+
+const CARACTERES_INVALIDOS = /[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-\.]/;
+
+export default function ReservarEspacio() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [successFlash, setSuccessFlash] = useState(false);
+
+  const [reservasActivas, setReservasActivas] = useState([]);
+  const MAX_RESERVAS = 3;
+
+  const [misVehiculos, setMisVehiculos] = useState([]);
+  const [modoVehiculo, setModoVehiculo] = useState("registrado");
+  const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState("");
+  const [imagenBase64, setImagenBase64] = useState("");
+
+  const [form, setForm] = useState({
+    estacionamiento: "",
+    espacio: "",
+    fecha: "",
+    horario: "",
+    duracion: 2,
+    marca: "",
+    modelo: "",
+    placa: "",
+  });
+
+  const [errors, setErrors] = useState({});
+  const [toast, setToast] = useState(null);
+
+  const [reservasDelDia, setReservasDelDia] = useState([]);
+  const [reservasDelCajon, setReservasDelCajon] = useState([]);
+  const [cargandoHoras, setCargandoHoras] = useState(false);
+
+  // 📌 Estados dinámicos para las horas del estacionamiento (por defecto 6 a 22)
+  const [horaApertura, setHoraApertura] = useState(6);
+  const [horaCierre, setHoraCierre] = useState(22);
+
+  const lastCorrectionToastRef = useRef(0);
+  const totalPagar = Number(form.duracion) * PRECIO_HORA;
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3200);
+  };
+
+  const parseReservaDate = (r) => {
+    try {
+      let base = null;
+
+      if (r.fecha && typeof r.fecha.toDate === "function") {
+        base = r.fecha.toDate();
+      } else if (r.fecha instanceof Date) {
+        base = new Date(r.fecha.getTime());
+      } else {
+        const fechaStr = String(r.fecha ?? "").trim();
+        const horarioStr = String(r.horario ?? "").trim();
+
+        if (fechaStr && horarioStr) {
+          const d = new Date(`${fechaStr}T${horarioStr}`);
+          if (!isNaN(d.getTime())) return d;
+        }
+        if (fechaStr) {
+          const d = new Date(fechaStr);
+          if (!isNaN(d.getTime())) base = d;
+        }
+        if (!base) {
+          const m = fechaStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+          if (m) {
+            const [, dd, mm, yy] = m;
+            const year = yy.length === 2 ? 2000 + parseInt(yy, 10) : parseInt(yy, 10);
+            base = new Date(year, parseInt(mm, 10) - 1, parseInt(dd, 10));
+          }
+        }
+      }
+
+      if (base && r.horario) {
+        const tm = String(r.horario).match(/(\d{1,2}):(\d{2})/);
+        if (tm) base.setHours(parseInt(tm[1], 10), parseInt(tm[2], 10), 0, 0);
+      }
+
+      return base;
+    } catch {
+      return null;
+    }
+  };
+
+  const esReservaVigente = (r) => {
+    const estado = String(r.estado ?? "").toLowerCase().trim();
+    if (
+      ["cancelada", "cancelado", "expirada", "expirado", "vencida", "vencido", "finalizada", "finalizado"].includes(estado)
+    ) {
+      return false;
+    }
+    const inicio = parseReservaDate(r);
+    if (!inicio) return false;
+
+    const dur = parseFloat(r.duracion) || 0;
+    const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
+    return fin >= new Date();
+  };
+
+  const calcularHoraFin = (r) => {
+    const inicio = parseReservaDate(r);
+    if (!inicio) return "";
+    const dur = parseFloat(r.duracion) || 0;
+    const fin = new Date(inicio.getTime() + dur * 60 * 60 * 1000);
+    return fin.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false });
+  };
+
+  const validarCampo = (id, value, strict = false) => {
+    if (id === "marca" || id === "modelo") {
+      const t = (value || "").trim();
+
+      if (!t) return strict ? "Este campo es obligatorio." : "";
+      if (t.length < 3) return "Mínimo 3 caracteres.";
+      if (t.length > 30) return "Máximo 30 caracteres.";
+      if (CARACTERES_INVALIDOS.test(value))
+        return "Solo se permiten letras, números, espacios y guiones.";
+      if (contieneGroseria(value))
+        return "El texto contiene lenguaje no permitido.";
+      if (esSpamTexto(value))
+        return "El texto parece spam o inválido. Escribe un nombre real.";
+
+      if (/[bcdfghjklmnpqrstvwxyz]{5,}/i.test(t))
+        return "El texto parece no ser una palabra real (demasiadas consonantes).";
+
+      if (/(.)\1{2,}/.test(value))
+        return "Evita repetir letras seguidas (ej. 'ooo').";
+      return "";
+    }
+
+    if (id === "placa") {
+      const v = (value || "").trim().toUpperCase();
+      if (!v) return strict ? "La placa es obligatoria." : "";
+      if (!strict && v.length < 6) return "";
+
+      const clean = v.replace(/-/g, "");
+
+      if (/[ÑQ]/.test(clean)) {
+        return "Las letras Ñ y Q no son válidas en placas mexicanas.";
+      }
+
+      const isAutoEstandar = /^[A-Z]{3}\d{3,4}$/.test(clean);
+      const isAutoNuevo = /^[A-Z]{3}\d{3}[A-Z]$/.test(clean);
+      const isCamion = /^[A-Z]{2}\d{4,5}[A-Z]$/.test(clean);
+      const isMoto = /^Y\d{3}[A-Z]{2}$/.test(clean);
+
+      if (!isAutoEstandar && !isAutoNuevo && !isCamion && !isMoto) {
+        return "Formato inválido. Ejemplos: ABC-123, ABC-1234, ABC-123-A, AA-1234-A, Y-123-AB.";
+      }
+
+      return "";
+    }
+
+    return "";
+  };
+
+  useEffect(() => {
+    const cajonParam = searchParams.get("cajon");
+    const estParam = searchParams.get("estacionamiento");
+    const fechaParam = searchParams.get("fecha");
+    const horarioParam = searchParams.get("horario");
+    const duracionParam = searchParams.get("duracion");
+
+    if (cajonParam || estParam || fechaParam || horarioParam || duracionParam) {
+      setForm((prevForm) => ({
+        ...prevForm,
+        ...(cajonParam ? { espacio: cajonParam } : {}),
+        ...(estParam ? { estacionamiento: estParam } : {}),
+        ...(fechaParam ? { fecha: fechaParam } : {}),
+        ...(horarioParam ? { horario: horarioParam } : {}),
+        ...(duracionParam ? { duracion: duracionParam } : {}),
+      }));
+      setErrors((prev) => ({ ...prev, estacionamiento: "", espacio: "" }));
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [searchParams]);
+
+  // 🔄 CARGAR HORARIOS DINÁMICOS DESDE FIRESTORE
+  useEffect(() => {
+    const fetchHorariosEstacionamiento = async () => {
+      if (!form.estacionamiento) {
+        setHoraApertura(6);
+        setHoraCierre(22);
+        return;
+      }
+      try {
+        // 📌 NOTA: Asumimos que form.estacionamiento guarda el ID del documento.
+        // Si guarda el nombre (ej. "ola"), cambia esto por un query usando where("nombre", "==", ...)
+        const docRef = doc(db, "estacionamientos", form.estacionamiento);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          if (data.hora_apertura) {
+            const [hh] = data.hora_apertura.split(":");
+            setHoraApertura(parseInt(hh, 10));
+          }
+          
+          if (data.hora_cierre) {
+            const [hh] = data.hora_cierre.split(":");
+            setHoraCierre(parseInt(hh, 10));
+          }
+        }
+      } catch (err) {
+        console.error("Error al cargar horarios del estacionamiento", err);
+      }
+    };
+    
+    fetchHorariosEstacionamiento();
+  }, [form.estacionamiento]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setUser(u);
+      await cargarReservas(u.uid);
+      const vehiculosGuardados = await getVehiculos(u.uid);
+      setMisVehiculos(vehiculosGuardados);
+      if (vehiculosGuardados.length === 0) setModoVehiculo("manual");
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [navigate]);
+
+  const cargarReservas = async (uid) => {
+    try {
+      const q = query(collection(db, "reservas"), where("uid", "==", uid));
+      const snap = await getDocs(q);
+      const activas = [];
+
+      snap.forEach((d) => {
+        const data = { id: d.id, ...d.data() };
+        if (esReservaVigente(data)) activas.push(data);
+      });
+
+      setReservasActivas(activas);
+    } catch (err) {
+      console.error("Error cargando reservas:", err);
+    }
+  };
+
+  useEffect(() => {
+    const fetchDisponibilidadDia = async () => {
+      if (!form.fecha || !form.estacionamiento) {
+        setReservasDelDia([]);
+        return;
+      }
+      try {
+        const q = query(
+          collection(db, "reservas"),
+          where("estacionamiento", "==", form.estacionamiento),
+          where("fecha", "==", form.fecha),
+          where("estado", "==", "activa")
+        );
+        const snap = await getDocs(q);
+        const lista = [];
+        snap.forEach((d) => lista.push(d.data()));
+        setReservasDelDia(lista);
+      } catch (err) {
+        console.error("Error al calcular disponibilidad del día", err);
+      }
+    };
+    fetchDisponibilidadDia();
+  }, [form.fecha, form.estacionamiento]);
+
+  useEffect(() => {
+    const fetchDisponibilidadCajon = async () => {
+      if (!form.fecha || !form.estacionamiento || !form.espacio) {
+        setReservasDelCajon([]);
+        return;
+      }
+      setCargandoHoras(true);
+      try {
+        const q = query(
+          collection(db, "reservas"),
+          where("estacionamiento", "==", form.estacionamiento),
+          where("espacio", "==", form.espacio),
+          where("fecha", "==", form.fecha),
+          where("estado", "==", "activa")
+        );
+        const snap = await getDocs(q);
+        const lista = [];
+        snap.forEach((d) => lista.push(d.data()));
+        setReservasDelCajon(lista);
+      } catch (err) {
+        console.error("Error al calcular disponibilidad del cajón", err);
+      } finally {
+        setCargandoHoras(false);
+      }
+    };
+    fetchDisponibilidadCajon();
+  }, [form.fecha, form.estacionamiento, form.espacio]);
+
+  const diaSaturado = Boolean(
+    form.fecha && form.estacionamiento && reservasDelDia.length >= CAPACIDAD_TOTAL
+  );
+
+  const getSemaforoInfo = () => {
+    if (!form.fecha || !form.estacionamiento) return null;
+    const ocupados = reservasDelDia.length;
+    const porcentajeLibre = ((CAPACIDAD_TOTAL - ocupados) / CAPACIDAD_TOTAL) * 100;
+
+    if (porcentajeLibre > 50) return { color: "#10b981", bg: "rgba(16,185,129,0.1)", texto: "Alta disponibilidad", icon: <FaCheckCircle /> };
+    if (porcentajeLibre > 0) return { color: "#f59e0b", bg: "rgba(245,158,11,0.1)", texto: "Media disponibilidad", icon: <FaInfoCircle /> };
+    return { color: "#ef4444", bg: "rgba(239,68,68,0.1)", texto: "Saturado (Sin horarios disponibles)", icon: <FaExclamationTriangle /> };
+  };
+
+  const buscarReservaEnConflicto = (horaStr) => {
+    if (!form.fecha || !form.espacio) return null;
+
+    const startSelected = new Date(`${form.fecha}T${horaStr}`);
+    const endSelected = new Date(startSelected.getTime() + Number(form.duracion) * 60 * 60 * 1000);
+    const BUFFER_MS = BUFFER_MINUTOS * 60 * 1000;
+
+    return reservasDelCajon.find((r) => {
+      if (!r.fecha || !r.horario) return false;
+      const rStart = parseReservaDate(r);
+      if (!rStart) return false;
+
+      const rDur = parseFloat(r.duracion) || 0;
+      const rEnd = new Date(rStart.getTime() + rDur * 60 * 60 * 1000);
+
+      const rStartProtegido = new Date(rStart.getTime() - BUFFER_MS);
+      const rEndProtegido = new Date(rEnd.getTime() + BUFFER_MS);
+
+      return startSelected < rEndProtegido && endSelected > rStartProtegido;
+    }) || null;
+  };
+
+  // 🔒 Bloquea SOLO por conflicto real de cajón (y por cierre), no por saturación global
+  const checkHoraBloqueada = (horaStr) => {
+    if (!form.fecha || !form.espacio) return false;
+
+    // 1) ¿Cabe la reserva antes del cierre dinámico?
+    const [hh, mm] = horaStr.split(":").map(Number);
+    const inicioMin = hh * 60 + mm;
+    const finMin = inicioMin + Number(form.duracion) * 60;
+    if (finMin > horaCierre * 60) return true;
+
+    // 2) ¿Choca con una reserva activa del mismo cajón?
+    return Boolean(buscarReservaEnConflicto(horaStr));
+  };
+
+  // 🕐 Solo horas en punto, dinámicas según el estacionamiento
+  const horasDisponibles = [];
+  for (let i = horaApertura; i <= horaCierre; i++) {
+    const horaStr = `${String(i).padStart(2, "0")}:00`;
+    horasDisponibles.push({ hora: horaStr, bloqueada: checkHoraBloqueada(horaStr) });
+  }
+
+  useEffect(() => {
+    if (form.horario && checkHoraBloqueada(form.horario)) {
+      const rChoque = buscarReservaEnConflicto(form.horario);
+      setForm((prev) => ({ ...prev, horario: "" }));
+
+      if (rChoque) {
+        showToast(
+          `Conflicto con la reserva de ${rChoque.horario} a ${calcularHoraFin(rChoque)}.`,
+          "info"
+        );
+      } else {
+        showToast("El horario seleccionado ya no está disponible para esa fecha o duración.", "info");
+      }
+    }
+  }, [form.fecha, form.duracion, reservasDelCajon, horaCierre]);
+
+  const hoyLocal = () => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split("T")[0];
+  };
+
+  const handleChange = (e) => {
+    const { id, value } = e.target;
+    let newValue = value;
+
+    if (id === "placa") {
+      let raw = value.toUpperCase().replace(/O/g, "0").replace(/I/g, "1");
+      const corregido = value.toUpperCase();
+      if (raw !== corregido) {
+        const ahora = Date.now();
+        if (ahora - lastCorrectionToastRef.current > 3000) {
+          showToast("Se corrigió automáticamente: O→0, I→1", "info");
+          lastCorrectionToastRef.current = ahora;
+        }
+      }
+      newValue = raw.replace(/[^A-Z0-9-]/g, "");
+    }
+
+    setForm((f) => ({ ...f, [id]: newValue }));
+
+    if (modoVehiculo === "manual" && ["marca", "modelo", "placa"].includes(id)) {
+      const errorMsg = validarCampo(id, newValue);
+      setErrors((prev) => ({ ...prev, [id]: errorMsg }));
+    } else {
+      setErrors((prev) => ({ ...prev, [id]: "" }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { id, value } = e.target;
+    if (modoVehiculo === "manual" && ["marca", "modelo", "placa"].includes(id)) {
+      const errorMsg = validarCampo(id, value, true);
+      setErrors((prev) => ({ ...prev, [id]: errorMsg }));
+    }
+  };
+
+  const handleSelectHora = (hora, bloqueada) => {
+    if (bloqueada) {
+      showToast("Este horario no está disponible.", "error");
+      return;
+    }
+
+    setForm((f) => ({ ...f, horario: hora }));
+    setErrors((prev) => ({ ...prev, horario: "" }));
+  };
+
+  const seleccionarVehiculo = (e) => {
+    const id = e.target.value;
+    setVehiculoSeleccionado(id);
+    setErrors((prev) => ({ ...prev, vehiculo: "" }));
+    if (id) {
+      const auto = misVehiculos.find((v) => v.id === id);
+      if (auto) {
+        setForm((prev) => ({ ...prev, marca: auto.marca, modelo: auto.modelo, placa: auto.placa }));
+        setImagenBase64(auto.imagen || "");
+      }
+    } else {
+      setForm((prev) => ({ ...prev, marca: "", modelo: "", placa: "" }));
+      setImagenBase64("");
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setErrors((prev) => ({ ...prev, imagen: "El archivo debe ser una imagen válida." }));
+      return showToast("El archivo debe ser una imagen válida.", "error");
+    }
+
+    if (file.size > 500 * 1024) {
+      setErrors((prev) => ({ ...prev, imagen: "La imagen supera el límite de 500 KB." }));
+      return showToast("La imagen es muy grande (máx. 500 KB).", "error");
+    }
+
+    setErrors((prev) => ({ ...prev, imagen: "" }));
+    const reader = new FileReader();
+    reader.onloadend = () => setImagenBase64(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const limpiarFormularioVehiculo = () => {
+    setForm((prev) => ({ ...prev, marca: "", modelo: "", placa: "" }));
+    setImagenBase64("");
+    setErrors((prev) => ({ ...prev, marca: "", modelo: "", placa: "", vehiculo: "", imagen: "" }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+
+    if (reservasActivas.length >= MAX_RESERVAS) {
+      setSaving(false);
+      return showToast(`Límite alcanzado: Ya cuentas con ${MAX_RESERVAS} reservas activas. No puedes realizar otra.`, "error");
+    }
+
+    const newErrors = {};
+
+    if (!form.estacionamiento || form.estacionamiento.trim().length < 3) {
+      newErrors.estacionamiento = "Debes usar el botón 'Elegir' para seleccionar una zona válida.";
+    }
+    if (!form.espacio || form.espacio.trim().length < 2) {
+      newErrors.espacio = "Debes seleccionar un cajón desde el mapa.";
+    }
+    if (!form.fecha) newErrors.fecha = "La fecha es obligatoria";
+    if (!form.horario) newErrors.horario = "Debes seleccionar una hora";
+
+    if (form.horario && checkHoraBloqueada(form.horario)) {
+      newErrors.horario = "El horario interfiere con una reserva existente o excede el cierre.";
+    }
+
+    const duracionNum = Number(form.duracion);
+    if (!form.duracion || isNaN(duracionNum) || duracionNum < 1 || duracionNum > 8) {
+      newErrors.duracion = "La duración debe ser entre 1 y 8 horas";
+    } else if (form.horario) {
+      const [hh, mm] = form.horario.split(":").map(Number);
+      const finMin = hh * 60 + mm + duracionNum * 60;
+      // Usamos horaCierre dinámico
+      if (finMin > horaCierre * 60) {
+        newErrors.horario = `La reserva terminaría después de las ${horaCierre}:00. Elige una hora más temprana o menor duración.`;
+      }
+    }
+
+    if (modoVehiculo === "registrado") {
+      if (!vehiculoSeleccionado) newErrors.vehiculo = "Selecciona un vehículo de tu lista";
+    } else {
+      const errMarca = validarCampo("marca", form.marca, true);
+      const errModelo = validarCampo("modelo", form.modelo, true);
+      const errPlaca = validarCampo("placa", form.placa, true);
+
+      if (errMarca) newErrors.marca = errMarca;
+      if (errModelo) newErrors.modelo = errModelo;
+      if (errPlaca) newErrors.placa = errPlaca;
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setSaving(false);
+      return showToast("Revisa los campos marcados en rojo.", "error");
+    }
+
+    try {
+      const nuevaReservaData = {
+        uid: user.uid,
+        estacionamiento: form.estacionamiento,
+        espacio: form.espacio,
+        fecha: form.fecha,
+        horario: form.horario,
+        duracion: `${form.duracion} horas`,
+        costoTotal: totalPagar,
+        estado: "activa",
+        marca: form.marca,
+        modelo: form.modelo,
+        placa: form.placa,
+        imagen: imagenBase64,
+        fechaCreacion: new Date().toISOString(),
+      };
+
+      const docRef = await addDoc(collection(db, "reservas"), nuevaReservaData);
+
+      setSuccessFlash(true);
+
+      setTimeout(() => {
+        navigate("/reservas", {
+          state: {
+            nuevaReserva: {
+              id: docRef.id,
+              ...nuevaReservaData,
+            },
+          },
+        });
+      }, 1500);
+    } catch (err) {
+      console.error(err);
+      showToast("Error al crear la reserva", "error");
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="res-page center-state">
+        <div className="loading-orbit">
+          <div className="loading-orbit-ring"></div>
+          <div className="loading-orbit-ring"></div>
+          <div className="loading-orbit-ring"></div>
+          <FaSpinner className="spin loading-center" size={26} color="#00f2fe" />
+        </div>
+        <p>Cargando...</p>
+      </div>
+    );
+  }
+
+  const semaforo = getSemaforoInfo();
+
+  return (
+    <div className="res-page">
+      {/* 🎨 TUS ESTILOS ORIGINALES COMPLETOS */}
+      <style>{`
+        input.input-error,
+        select.input-error,
+        .form-input.input-error,
+        .upload-box.input-error {
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 12px rgba(239, 68, 68, 0.3) !important;
+          background: rgba(239, 68, 68, 0.05) !important;
+        }
+
+        @keyframes fadeIn        { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp      { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin          { to { transform: rotate(360deg); } }
+        @keyframes pop           { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        @keyframes pulse         { 0%,100% { opacity: .4; } 50% { opacity: .85; } }
+        @keyframes toastIn       { from { opacity: 0; transform: translateY(30px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toastBounce   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px) scale(1.1); } }
+        @keyframes shake         { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+        @keyframes glow          { 0%,100% { box-shadow: 0 20px 60px rgba(0,0,0,.4); } 50% { box-shadow: 0 20px 70px rgba(0,242,254,.18); } }
+        @keyframes floatCar      { 0%,100% { transform: translate(-50%,-50%); } 50% { transform: translate(-50%,-55%); } }
+        @keyframes driveIn       { 0% { transform: translate(-200%,-50%); } 70% { transform: translate(-45%,-50%); } 85% { transform: translate(-55%,-50%); } 100% { transform: translate(-50%,-50%); } }
+        @keyframes headlight     { 0%,100% { box-shadow: 0 0 10px 2px rgba(255,231,100,.8); } 50% { box-shadow: 0 0 20px 6px rgba(255,231,100,1); } }
+        @keyframes wheelSpin     { to { transform: rotate(720deg); } }
+        @keyframes carGlow       { 0%,100% { opacity: .4; transform: scale(1); } 50% { opacity: .8; transform: scale(1.1); } }
+        @keyframes floorPulse    { 0%,100% { opacity: .3; } 50% { opacity: .7; } }
+        @keyframes signBounce    { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
+        @keyframes blobMove1     { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(80px,-60px) scale(1.15); } }
+        @keyframes blobMove2     { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-100px,80px) scale(1.1); } }
+        @keyframes blobMove3     { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,80px) scale(1.2); } }
+        @keyframes gridMove      { from { background-position: 0 0; } to { background-position: 60px 60px; } }
+        @keyframes iconFloat     { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-4px) rotate(6deg); } }
+        @keyframes iconWiggle    { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+        @keyframes titleRing     { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(2); opacity: 0; } }
+        @keyframes tipRing       { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(2); opacity: 0; } }
+        @keyframes fieldSlideIn  { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes numberPop     { 0% { transform: scale(.8); opacity: .4; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes costPulse     { 0%,100% { box-shadow: 0 0 0 0 rgba(0,242,254,.3); } 50% { box-shadow: 0 0 0 8px rgba(0,242,254,0); } }
+        @keyframes rocketBob     { 0%,100% { transform: translateY(0) rotate(-15deg); } 50% { transform: translateY(-3px) rotate(-10deg); } }
+        @keyframes shineSweep    { 0% { transform: translateX(-120%) skewX(-20deg); } 100% { transform: translateX(220%) skewX(-20deg); } }
+        @keyframes uploadPulse   { 0%,100% { border-color: rgba(0,242,254,.4); } 50% { border-color: rgba(0,242,254,1); } }
+        @keyframes orbitSpin     { to { transform: rotate(360deg); } }
+        @keyframes errorSlide    { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        * { box-sizing: border-box; }
+        .res-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+          font-family: 'Outfit','Segoe UI',system-ui,sans-serif;
+          color: #e2e8f0;
+          padding: 30px 20px 60px;
+          animation: fadeIn .4s ease;
+          position: relative;
+          overflow-x: hidden;
+        }
+        .res-page.center-state {
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 16px;
+          color: #94a3b8;
+        }
+        .spin { animation: spin 1s linear infinite; }
+        .container { max-width: 1000px; margin: 0 auto; position: relative; z-index: 1; }
+
+        .bg-deco { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+        .bg-blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .22; }
+        .blob-1 { width: 480px; height: 480px; background: radial-gradient(circle,#00f2fe,transparent 70%); top: -160px; left: -120px; animation: blobMove1 20s ease-in-out infinite; }
+        .blob-2 { width: 560px; height: 560px; background: radial-gradient(circle,#8b5cf6,transparent 70%); bottom: -180px; right: -160px; animation: blobMove2 24s ease-in-out infinite; }
+        .blob-3 { width: 380px; height: 380px; background: radial-gradient(circle,#10b981,transparent 70%); top: 40%; right: 10%; animation: blobMove3 22s ease-in-out infinite; }
+        .bg-grid {
+          position: absolute; inset: 0;
+          background-image:
+            linear-gradient(rgba(0,242,254,.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,242,254,.04) 1px, transparent 1px);
+          background-size: 60px 60px;
+          animation: gridMove 8s linear infinite;
+          mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
+          -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
+        }
+
+        .res-header {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 15px; margin-bottom: 24px; flex-wrap: wrap;
+          animation: fadeInUp .5s ease;
+        }
+        .res-header h2 {
+          color: #e2e8f0; font-size: 26px; margin: 0;
+          display: inline-flex; align-items: center; gap: 12px;
+        }
+        .title-icon-wrap {
+          position: relative;
+          width: 40px; height: 40px; border-radius: 12px;
+          background: linear-gradient(135deg,#00f2fe,#4facfe);
+          color: #0f172a;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 18px;
+          box-shadow: 0 8px 22px rgba(0,242,254,.4);
+          animation: iconFloat 3s ease-in-out infinite;
+        }
+        .title-icon { transform: rotate(-15deg); }
+        .title-icon-ring {
+          position: absolute; inset: -3px;
+          border: 2px solid rgba(0,242,254,.5);
+          border-radius: 15px;
+          animation: titleRing 2.4s ease-out infinite;
+          pointer-events: none;
+        }
+        .header-badge {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: rgba(245,158,11,.12);
+          color: #f59e0b;
+          border: 1px solid rgba(245,158,11,.35);
+          padding: 6px 12px; border-radius: 999px;
+          font-size: 11px; font-weight: 700;
+          letter-spacing: .4px;
+          animation: iconFloat 3s ease-in-out infinite;
+        }
+        .back-link {
+          display: inline-flex; align-items: center; gap: 8px;
+          color: #94a3b8; text-decoration: none; font-size: 14px;
+          padding: 8px 14px; border-radius: 8px;
+          border: 1px solid #334155;
+          transition: all .2s;
+        }
+        .back-link:hover { color: #00f2fe; border-color: rgba(0,242,254,.4); transform: translateX(-3px); }
+
+        .reserva-card {
+          display: grid; grid-template-columns: 280px 1fr;
+          gap: 32px;
+          background: #1e293b;
+          border: 1px solid rgba(0,242,254,.15);
+          border-radius: 18px; padding: 32px;
+          animation: fadeInUp .6s cubic-bezier(.16,1,.3,1), glow 5s ease-in-out infinite;
+          position: relative;
+          overflow: hidden;
+        }
+        .reserva-card::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+          background: linear-gradient(90deg,#00f2fe,#4facfe,#8b5cf6,#00f2fe);
+          background-size: 300% 100%;
+          animation: shineSweep 4s linear infinite alternate;
+          pointer-events: none;
+        }
+
+        .reserva-visual {
+          display: flex; flex-direction: column;
+          align-items: center; gap: 24px;
+        }
+        .parking-scene {
+          position: relative;
+          width: 220px; height: 260px;
+          display: flex; align-items: flex-end; justify-content: center;
+        }
+        .parking-glow {
+          position: absolute;
+          bottom: 20px; left: 50%; transform: translateX(-50%);
+          width: 180px; height: 60px;
+          background: radial-gradient(ellipse, rgba(0,242,254,.35), transparent 70%);
+          filter: blur(12px);
+          animation: floorPulse 3s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .parking-floor {
+          position: absolute;
+          bottom: 10px; left: 50%; transform: translateX(-50%);
+          width: 160px; height: 200px;
+          display: flex; flex-direction: column;
+          justify-content: space-around;
+          pointer-events: none;
+        }
+        .parking-floor span {
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(0,242,254,.25), transparent);
+          animation: floorPulse 2.4s ease-in-out infinite;
+        }
+        .parking-floor span:nth-child(2) { animation-delay: .4s; }
+        .parking-floor span:nth-child(3) { animation-delay: .8s; }
+        .parking-floor span:nth-child(4) { animation-delay: 1.2s; }
+
+        .parking-spot {
+          position: absolute;
+          bottom: 20px;
+          width: 140px; height: 180px;
+          border: 3px dashed rgba(0,242,254,.5);
+          border-radius: 14px;
+          animation: pulse 3s ease-in-out infinite;
+        }
+        .parking-sign {
+          position: absolute;
+          top: 10px; right: 30px;
+          width: 32px; height: 32px;
+          border-radius: 50%;
+          background: linear-gradient(135deg,#00f2fe,#4facfe);
+          color: #0f172a;
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 900; font-size: 16px;
+          box-shadow: 0 4px 14px rgba(0,242,254,.5);
+          animation: signBounce 3s ease-in-out infinite;
+        }
+
+        .car {
+          position: relative;
+          width: 70px; height: 110px;
+          background: linear-gradient(160deg, #4facfe, #00f2fe);
+          border-radius: 18px 18px 10px 10px;
+          margin-bottom: 40px;
+          box-shadow: 0 8px 24px rgba(0,242,254,.4);
+          animation: driveIn 2s cubic-bezier(.22,1,.36,1) forwards,
+                     floatCar 3s ease-in-out 2s infinite;
+          top: 50%; left: 50%;
+          transform: translate(-50%,-50%);
+        }
+        .car-windshield {
+          position: absolute;
+          top: 14px; left: 10px; right: 10px; height: 24px;
+          background: rgba(15,23,42,.65);
+          border-radius: 8px 8px 4px 4px;
+        }
+        .car-headlights {
+          position: absolute;
+          bottom: 6px; left: 8px; right: 8px; height: 5px;
+          background: #ffe764;
+          border-radius: 4px;
+          animation: headlight 1.5s ease-in-out infinite;
+        }
+        .car-glow {
+          position: absolute; inset: -8px;
+          border-radius: 22px;
+          background: radial-gradient(circle, rgba(0,242,254,.4), transparent 60%);
+          filter: blur(10px);
+          animation: carGlow 2s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .wheel {
+          position: absolute;
+          width: 14px; height: 14px;
+          background: #0b1220;
+          border: 3px solid #334155;
+          border-radius: 50%;
+          animation: wheelSpin 1s linear infinite;
+        }
+        .wheel::after {
+          content: ''; position: absolute; inset: 2px;
+          background: #64748b; border-radius: 50%;
+        }
+        .wheel-tl { top: 16px; left: -8px; }
+        .wheel-tr { top: 16px; right: -8px; }
+        .wheel-bl { bottom: 16px; left: -8px; }
+        .wheel-br { bottom: 16px; right: -8px; }
+
+        .tips-box {
+          background: rgba(0,242,254,.05);
+          border: 1px solid rgba(0,242,254,.15);
+          border-radius: 12px;
+          padding: 18px;
+          width: 100%;
+          animation: fadeInUp .8s ease .2s backwards;
+        }
+        .tips-box h4 {
+          color: #00f2fe; font-size: 14px; margin: 0 0 12px;
+          display: flex; align-items: center; gap: 10px;
+        }
+        .tip-icon {
+          position: relative;
+          width: 26px; height: 26px;
+          border-radius: 8px;
+          background: rgba(0,242,254,.15);
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 13px;
+          animation: iconWiggle 3s ease-in-out infinite;
+        }
+        .tip-icon-ring {
+          position: absolute; inset: -3px;
+          border: 1.5px solid rgba(0,242,254,.5);
+          border-radius: 10px;
+          animation: tipRing 2s ease-out infinite;
+        }
+        .tips-box ul {
+          margin: 0; padding: 0; list-style: none;
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .tips-box li {
+          color: #94a3b8; font-size: 12px; line-height: 1.5;
+          padding-left: 20px; position: relative;
+          animation: fadeInUp .5s ease backwards;
+        }
+        .tips-box li svg {
+          position: absolute; left: 0; top: 2px;
+          color: #00f2fe; font-size: 11px;
+        }
+        .tips-box li strong { color: #00f2fe; }
+
+        .reserva-info { display: flex; flex-direction: column; gap: 18px; }
+
+        .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; animation: fieldSlideIn .5s ease backwards; }
+        .field label {
+          color: #94a3b8; font-size: 12px;
+          text-transform: uppercase; letter-spacing: .5px;
+          font-weight: 600;
+          display: inline-flex; align-items: center; gap: 6px;
+        }
+        .field label svg { color: #00f2fe; }
+        .field input, .field select, .form-input {
+          width: 100%;
+          padding: 12px 14px;
+          background: #0f172a;
+          border: 1px solid #334155;
+          border-radius: 10px;
+          color: #e2e8f0; font-size: 14px; outline: none;
+          transition: border-color .2s, box-shadow .2s, transform .15s;
+          font-family: inherit;
+        }
+        .field input:focus, .field select:focus, .form-input:focus {
+          border-color: #00f2fe;
+          box-shadow: 0 0 0 3px rgba(0,242,254,.15);
+          transform: translateY(-1px);
+        }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; animation: fieldSlideIn .5s ease .3s backwards; }
+        .row .field { margin-bottom: 0; }
+
+        .error-text {
+          display: flex; align-items: center; gap: 6px;
+          color: #ef4444; font-size: 12px; font-weight: 600;
+          margin-top: 4px;
+          animation: errorSlide 0.3s ease-out;
+        }
+        .error-text svg { font-size: 14px; }
+        .time-grid.grid-error {
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 12px rgba(239, 68, 68, 0.2) !important;
+        }
+
+        .input-icon { position: relative; display: flex; align-items: center; width: 100%; }
+        .input-icon-left {
+          position: absolute; left: 14px;
+          color: #64748b; font-size: 14px;
+          pointer-events: none;
+          transition: color .2s, transform .2s;
+          z-index: 1;
+        }
+        .input-icon:focus-within .input-icon-left {
+          color: #00f2fe;
+          transform: scale(1.1) rotate(-6deg);
+        }
+        .input-icon input {
+          padding-left: 40px !important;
+          width: 100%;
+          padding: 12px 14px;
+          background: #0f172a;
+          border: 1px solid #334155;
+          border-radius: 10px;
+          color: #e2e8f0; font-size: 14px; outline: none;
+          transition: border-color .2s, box-shadow .2s, transform .15s;
+          font-family: inherit;
+        }
+
+        .input-with-action { display: flex; gap: 8px; }
+        .input-with-action .input-icon { flex: 1; min-width: 0; }
+        .btn-mapa {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 0 16px;
+          background: linear-gradient(135deg,#00f2fe,#4facfe);
+          color: #0f172a;
+          border: none;
+          border-radius: 10px;
+          text-decoration: none;
+          font-size: 13px; font-weight: 700;
+          white-space: nowrap;
+          cursor: pointer;
+          transition: all .3s cubic-bezier(.34,1.56,.64,1);
+          box-shadow: 0 4px 12px rgba(0,242,254,.3);
+        }
+        .btn-mapa:hover {
+          transform: translateY(-2px) scale(1.03);
+          box-shadow: 0 8px 20px rgba(0,242,254,.45);
+        }
+
+        .cost-box {
+          position: relative;
+          display: flex; align-items: center; gap: 14px;
+          padding: 16px 18px;
+          background: linear-gradient(135deg,rgba(0,242,254,.08),rgba(79,172,254,.05));
+          border: 1.5px dashed rgba(0,242,254,.4);
+          border-radius: 14px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          animation: fieldSlideIn .5s ease .35s backwards;
+        }
+        .cost-icon {
+          position: relative;
+          width: 46px; height: 46px;
+          border-radius: 13px;
+          background: linear-gradient(135deg,#00f2fe,#4facfe);
+          color: #0f172a;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 22px;
+          box-shadow: 0 8px 22px rgba(0,242,254,.4);
+          flex-shrink: 0;
+          animation: iconFloat 3s ease-in-out infinite;
+        }
+        .cost-icon-ring {
+          position: absolute; inset: -4px;
+          border: 2px solid rgba(0,242,254,.5);
+          border-radius: 16px;
+          animation: costPulse 2s ease-out infinite;
+        }
+        .cost-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .cost-label {
+          color: #94a3b8; font-size: 10.5px;
+          text-transform: uppercase; letter-spacing: .5px;
+          font-weight: 700;
+        }
+        .cost-value {
+          display: flex; align-items: baseline; gap: 3px;
+          color: #00f2fe;
+        }
+        .currency { font-size: 16px; font-weight: 700; }
+        .amount {
+          display: inline-block;
+          font-size: 26px; font-weight: 900;
+          letter-spacing: -1px;
+          animation: numberPop .4s cubic-bezier(.34,1.56,.64,1);
+        }
+        .currency-name { font-size: 12px; font-weight: 700; margin-left: 2px; }
+        .cost-info {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 6px 10px;
+          background: rgba(0,0,0,.3);
+          border-radius: 8px;
+          color: #94a3b8;
+          font-size: 11px;
+        }
+        .cost-info svg { color: #00f2fe; font-size: 11px; }
+
+        .section-title {
+          display: flex; align-items: center; gap: 8px;
+          color: #00f2fe; font-size: 13px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: .5px;
+          margin-top: 14px; margin-bottom: 12px;
+          position: relative;
+        }
+        .section-title svg { animation: iconWiggle 3s ease-in-out infinite; }
+        .section-line {
+          flex: 1; height: 1px;
+          background: linear-gradient(90deg,rgba(0,242,254,.4),transparent);
+          margin-left: 6px;
+        }
+
+        .veh-switch {
+          position: relative;
+          display: flex;
+          background: rgba(0,0,0,.3);
+          border-radius: 10px;
+          padding: 4px;
+          margin-bottom: 14px;
+          overflow: hidden;
+          animation: fieldSlideIn .5s ease .4s backwards;
+        }
+        .veh-indicator {
+          position: absolute;
+          top: 4px; bottom: 4px;
+          width: calc(50% - 4px);
+          background: linear-gradient(135deg,#00f2fe,#4facfe);
+          border-radius: 7px;
+          box-shadow: 0 4px 12px rgba(0,242,254,.4);
+          transition: left .35s cubic-bezier(.34,1.56,.64,1);
+        }
+        .veh-indicator.registrado { left: 4px; }
+        .veh-indicator.manual { left: calc(50% + 0px); }
+        .veh-switch button {
+          flex: 1;
+          padding: 10px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-weight: 700; font-size: 12.5px;
+          z-index: 1; position: relative;
+          transition: color .3s;
+          display: inline-flex; align-items: center; justify-content: center;
+          gap: 6px;
+          font-family: inherit;
+        }
+        .veh-switch button.active { color: #0f172a; }
+        .veh-switch button:not(.active) { color: #94a3b8; }
+        .veh-switch button:not(.active):hover { color: #cbd5e1; }
+        .veh-switch button:disabled { cursor: not-allowed; }
+
+        .btn-submit {
+          position: relative;
+          margin-top: 20px;
+          width: 100%;
+          padding: 14px 18px;
+          background: linear-gradient(135deg,#00f2fe,#4facfe);
+          color: #0f172a;
+          border: none; border-radius: 12px;
+          font-size: 15px; font-weight: 800;
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          gap: 10px;
+          min-height: 52px;
+          font-family: inherit;
+          overflow: hidden;
+          box-shadow: 0 6px 20px rgba(0,242,254,.35);
+          transition: transform .2s, box-shadow .2s;
+        }
+        .btn-submit:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 30px rgba(0,242,254,.55);
+        }
+        .btn-submit:disabled { opacity: .7; cursor: not-allowed; }
+
+        .loading-orbit {
+          position: relative; width: 80px; height: 80px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .loading-orbit-ring {
+          position: absolute; inset: 0;
+          border: 2px solid transparent;
+          border-top-color: #00f2fe;
+          border-radius: 50%;
+          animation: orbitSpin 1.2s linear infinite;
+        }
+        .loading-orbit-ring:nth-child(2) {
+          inset: 8px; border-top-color: #4facfe;
+          animation-duration: .9s;
+          animation-direction: reverse;
+        }
+        .loading-orbit-ring:nth-child(3) {
+          inset: 16px; border-top-color: #8b5cf6;
+          animation-duration: .7s;
+        }
+
+        @media (max-width: 780px) {
+          .reserva-card { grid-template-columns: 1fr; padding: 22px; }
+          .parking-scene { width: 180px; height: 220px; }
+          .row { grid-template-columns: 1fr; }
+          .res-header h2 { font-size: 22px; }
+          .input-with-action { flex-direction: column; }
+          .btn-mapa { justify-content: center; padding: 12px; }
+          .cost-box { flex-wrap: wrap; }
+          .cost-info { width: 100%; justify-content: center; }
+        }
+
+        .semaforo-badge {
+          margin-top: 8px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          width: fit-content;
+          animation: fadeIn 0.3s ease, badgePulse 2s infinite alternate;
+          box-shadow: 0 0 10px currentColor;
+          border-width: 1px;
+          border-style: solid;
+        }
+
+        .time-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+          gap: 10px;
+          margin-top: 10px;
+          max-height: 220px;
+          overflow-y: auto;
+          padding: 12px;
+          background: rgba(15, 23, 42, 0.4);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .time-grid::-webkit-scrollbar { width: 6px; }
+        .time-grid::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 10px; }
+        .time-grid::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .time-grid::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
+
+        .time-btn {
+          background: rgba(30, 41, 59, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #e2e8f0;
+          padding: 10px 0;
+          border-radius: 10px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-family: inherit;
+          font-size: 14px;
+          display: flex; justify-content: center; align-items: center;
+        }
+
+        .time-btn:hover:not(.blocked) {
+          border-color: rgba(0, 242, 254, 0.6);
+          background: rgba(0, 242, 254, 0.15);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 242, 254, 0.2);
+          color: #00f2fe;
+        }
+
+        .time-btn.selected {
+          background: linear-gradient(135deg, #00f2fe, #0072ff);
+          color: #050b14;
+          border-color: #00f2fe;
+          box-shadow: 0 0 15px rgba(0, 242, 254, 0.5);
+          font-weight: 900;
+          transform: scale(1.02);
+        }
+
+        .time-btn.blocked {
+          background: rgba(15, 23, 42, 0.6);
+          color: #475569;
+          border-color: rgba(255, 255, 255, 0.02);
+          cursor: not-allowed;
+          opacity: 0.6;
+          box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes badgePulse {
+          0% { box-shadow: 0 0 5px currentColor; }
+          100% { box-shadow: 0 0 15px currentColor; }
+        }
+      `}</style>
+
+      {toast && (
+        <div className={`toast-banner ${toast.type}`}>
+          {toast.type === "error" ? <FaExclamationTriangle /> : <FaInfoCircle />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      <div className="bg-deco">
+        <div className="bg-blob blob-1"></div>
+        <div className="bg-blob blob-2"></div>
+        <div className="bg-blob blob-3"></div>
+        <div className="bg-grid"></div>
+      </div>
+
+      <div className="container">
+        <header className="res-header">
+          <Link to="/perfil" className="back-link"><FaArrowLeft /> Volver al perfil</Link>
+          <h2>
+            <span className="title-icon-wrap"><FaRocket className="title-icon" /><span className="title-icon-ring"></span></span>
+            Nueva Reserva
+          </h2>
+          <span className="header-badge"><FaFire /> Rápido y seguro</span>
+        </header>
+
+        {reservasActivas.length >= MAX_RESERVAS && (
+          <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", padding: "12px 16px", borderRadius: "10px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px", color: "#fca5a5" }}>
+            <FaExclamationTriangle size={20} />
+            <span>Has alcanzado el límite de <strong>{MAX_RESERVAS} reservas activas</strong>. Puedes consultar tus reservas existentes antes de intentar una nueva.</span>
+          </div>
+        )}
+
+        <div className="reserva-card">
+          <div className="reserva-visual">
+            <div className="parking-scene">
+              <div className="parking-glow"></div>
+              <div className="parking-floor"><span></span><span></span><span></span><span></span></div>
+              <div className="parking-spot"></div>
+              <div className="parking-sign">P</div>
+              <div className="car">
+                <div className="car-windshield"></div>
+                <div className="car-headlights"></div>
+                <div className="car-glow"></div>
+                <div className="wheel wheel-tl"></div><div className="wheel wheel-tr"></div>
+                <div className="wheel wheel-bl"></div><div className="wheel wheel-br"></div>
+              </div>
+            </div>
+
+            <div className="tips-box">
+              <h4><span className="tip-icon"><FaLightbulb /><span className="tip-icon-ring"></span></span> Proceso de Reserva</h4>
+              <ul>
+                <li><FaMapMarkedAlt /> Elige un estacionamiento y luego un cajón.</li>
+                <li><FaCoins /> Tarifa de <strong>${PRECIO_HORA} MXN por hora</strong>.</li>
+                <li><FaShieldAlt /> Hasta {MAX_RESERVAS} reservas activas.</li>
+                <li><FaBolt /> Confirmación instantánea con tu QR.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="reserva-info">
+            <form onSubmit={handleSubmit} noValidate>
+
+              <div className="field">
+                <label><FaBuilding /> Estacionamiento / Zona</label>
+                <div className="input-with-action">
+                  <div className="input-icon" style={{ flex: 1 }}>
+                    <FaMapPin className="input-icon-left" />
+                    <input
+                      id="estacionamiento"
+                      type="text"
+                      readOnly
+                      onClick={() => showToast("Usa el botón 'Elegir' para abrir el mapa", "error")}
+                      className={errors.estacionamiento ? "input-error" : ""}
+                      value={form.estacionamiento}
+                      placeholder="Elige del mapa"
+                      style={{ cursor: "pointer" }}
+                    />
+                  </div>
+                  <Link to="/estacionamientos" className="btn-mapa">
+                    <FaMapMarkedAlt /> Elegir
+                  </Link>
+                </div>
+                {errors.estacionamiento && <span className="error-text"><FaExclamationTriangle /> {errors.estacionamiento}</span>}
+              </div>
+
+              <div className="field">
+                <label><FaParking /> Cajón seleccionado</label>
+                <div className="input-icon">
+                  <FaKey className="input-icon-left" />
+                  <input
+                    id="espacio"
+                    type="text"
+                    readOnly
+                    onClick={() => showToast("El cajón se selecciona desde el mapa", "error")}
+                    className={errors.espacio ? "input-error" : ""}
+                    value={form.espacio}
+                    placeholder="Elige del mapa"
+                    style={{ cursor: "not-allowed", opacity: 0.8 }}
+                  />
+                </div>
+                {errors.espacio && <span className="error-text"><FaExclamationTriangle /> {errors.espacio}</span>}
+              </div>
+
+              <div className="row">
+                <div className="field">
+                  <label><FaCalendarCheck /> Fecha</label>
+                  <input
+                    id="fecha"
+                    type="date"
+                    className={errors.fecha ? "input-error" : ""}
+                    value={form.fecha}
+                    onChange={handleChange}
+                    min={hoyLocal()}
+                  />
+                  {errors.fecha && <span className="error-text"><FaExclamationTriangle /> {errors.fecha}</span>}
+
+                  {semaforo && form.fecha && (
+                    <div className="semaforo-badge" style={{ background: semaforo.bg, color: semaforo.color, border: `1px solid ${semaforo.color}` }}>
+                      {semaforo.icon} {semaforo.texto}
+                    </div>
+                  )}
+                </div>
+                <div className="field">
+                  <label><FaHourglassHalf /> Duración (horas)</label>
+                  <input
+                    id="duracion"
+                    type="number"
+                    className={errors.duracion ? "input-error" : ""}
+                    value={form.duracion}
+                    onChange={handleChange}
+                    min="1"
+                    max="8"
+                  />
+                  {errors.duracion && <span className="error-text"><FaExclamationTriangle /> {errors.duracion}</span>}
+                </div>
+              </div>
+
+              <div className="field">
+                <label><FaStopwatch /> Hora de inicio</label>
+                {cargandoHoras ? (
+                  <div style={{ color: "#00f2fe", display: "flex", gap: "10px", alignItems: "center", padding: "10px 0" }}>
+                    <FaSpinner className="spin" /> Calculando disponibilidad...
+                  </div>
+                ) : !form.espacio ? (
+                  <div className="error-text" style={{ padding: "10px", background: "rgba(245,158,11,0.1)", borderRadius: "8px", color: "#f59e0b" }}>
+                    <FaInfoCircle /> Primero selecciona un cajón en el mapa para ver los horarios disponibles.
+                  </div>
+                ) : (
+                  <>
+                    <div className={`time-grid ${errors.horario ? "grid-error" : ""}`}>
+                      {horasDisponibles.map((h) => (
+                        <button
+                          key={h.hora}
+                          type="button"
+                          onClick={() => handleSelectHora(h.hora, h.bloqueada)}
+                          className={`time-btn ${form.horario === h.hora ? "selected" : ""} ${h.bloqueada ? "blocked" : ""}`}
+                          title={h.bloqueada ? "No disponible" : `Reservar a las ${h.hora}`}
+                        >
+                          {h.hora}
+                        </button>
+                      ))}
+                    </div>
+                    {errors.horario && <span className="error-text"><FaExclamationTriangle /> {errors.horario}</span>}
+                  </>
+                )}
+              </div>
+
+              <div className="cost-box" style={{ marginTop: "20px" }}>
+                <div className="cost-icon"><FaHandHoldingUsd /><span className="cost-icon-ring"></span></div>
+                <div className="cost-content">
+                  <span className="cost-label">Costo total a pagar</span>
+                  <div className="cost-value">
+                    <span className="currency">$</span>
+                    <span key={totalPagar} className="amount">{totalPagar}</span>
+                    <span className="currency-name">MXN</span>
+                  </div>
+                </div>
+                <div className="cost-info"><FaReceipt /><small>{form.duracion} h × ${PRECIO_HORA} / h</small></div>
+              </div>
+
+              <div className="section-title"><FaCar /> Datos del vehículo<span className="section-line"></span></div>
+              <div className="veh-switch">
+                <span className={`veh-indicator ${modoVehiculo}`}></span>
+                <button
+                  type="button"
+                  className={modoVehiculo === "registrado" ? "active" : ""}
+                  onClick={() => { setModoVehiculo("registrado"); setErrors({}); }}
+                  disabled={misVehiculos.length === 0}
+                >
+                  <FaUser /> Usar registrado
+                </button>
+                <button
+                  type="button"
+                  className={modoVehiculo === "manual" ? "active" : ""}
+                  onClick={() => { setModoVehiculo("manual"); limpiarFormularioVehiculo(); }}
+                >
+                  <FaMagic /> Ingresar manual
+                </button>
+              </div>
+
+              {modoVehiculo === "registrado" ? (
+                <div className="field">
+                  <label>Selecciona tu vehículo</label>
+                  <select
+                    value={vehiculoSeleccionado}
+                    onChange={seleccionarVehiculo}
+                    className={errors.vehiculo ? "input-error" : ""}
+                  >
+                    <option value="">-- Elige un vehículo registrado --</option>
+                    {misVehiculos.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.marca} {v.modelo} — {v.placa}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.vehiculo && <span className="error-text"><FaExclamationTriangle /> {errors.vehiculo}</span>}
+                </div>
+              ) : (
+                <>
+                  <div className="row">
+                    <div className="field">
+                      <label>Marca</label>
+                      <input
+                        id="marca"
+                        type="text"
+                        list="marcas-list"
+                        value={form.marca}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="Ej. Nissan"
+                        className={errors.marca ? "input-error" : ""}
+                      />
+                      <datalist id="marcas-list">
+                        {MARCAS.map((m) => <option key={m} value={m} />)}
+                      </datalist>
+                      {errors.marca && <span className="error-text"><FaExclamationTriangle /> {errors.marca}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label>Modelo</label>
+                      <input
+                        id="modelo"
+                        type="text"
+                        value={form.modelo}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="Ej. Versa"
+                        className={errors.modelo ? "input-error" : ""}
+                      />
+                      {errors.modelo && <span className="error-text"><FaExclamationTriangle /> {errors.modelo}</span>}
+                    </div>
+                  </div>
+
+                  <div className="row">
+                    <div className="field">
+                      <label>Placa</label>
+                      <input
+                        id="placa"
+                        type="text"
+                        value={form.placa}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="Ej. ABC-123-A"
+                        maxLength={10}
+                        className={errors.placa ? "input-error" : ""}
+                      />
+                      {errors.placa && <span className="error-text"><FaExclamationTriangle /> {errors.placa}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label><FaCamera /> Foto del vehículo (opcional)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+                      {errors.imagen && <span className="error-text"><FaExclamationTriangle /> {errors.imagen}</span>}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {imagenBase64 && (
+                <div style={{ marginTop: "10px", textAlign: "center" }}>
+                  <img
+                    src={imagenBase64}
+                    alt="Vista previa del vehículo"
+                    style={{ maxHeight: "120px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.15)" }}
+                  />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn-submit"
+                disabled={saving || successFlash || reservasActivas.length >= MAX_RESERVAS}
+                style={{ marginTop: "24px", width: "100%" }}
+              >
+                {saving ? (
+                  <><FaSpinner className="spin" /> Procesando reserva...</>
+                ) : successFlash ? (
+                  <><FaCheckCircle /> ¡Reserva confirmada!</>
+                ) : (
+                  <><FaTicketAlt /> Confirmar Reserva (${totalPagar} MXN)</>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,89 @@
+/* Estilos propios de la página (antes estaban dentro del <style> de reservar.html).
+   Todo va dentro de .reservar-pagina para no afectar a las demás pantallas. */
+
+.reservar-pagina .navbar__izq { display: flex; align-items: center; gap: 15px; }
+
+.reservar-pagina .form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.reservar-pagina .form-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 12px 15px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  outline: none;
+  transition: 0.2s;
+}
+.reservar-pagina .form-input:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px var(--neon-glow);
+}
+
+/* Para que el icono del calendario/reloj se vea blanco */
+.reservar-pagina ::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+
+/* Animación del carro */
+.reservar-pagina .parking-scene {
+  position: relative; width: 120px; height: 200px; margin: 20px auto;
+  border: 2px dashed var(--border-line); border-radius: 12px; background: rgba(0, 0, 0, 0.2);
+}
+.reservar-pagina .car {
+  position: absolute; width: 60px; height: 100px; background: #1a1a1a; border-radius: 12px;
+  border: 2px solid var(--text-secondary); top: 50%; left: 50%; transform: translate(-50%, -50%);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1); animation: reservarFloatCar 3s ease-in-out infinite;
+}
+.reservar-pagina .car-windshield {
+  position: absolute; top: 15px; left: 10px; right: 10px; height: 25px;
+  background: rgba(255, 255, 255, 0.1); border-radius: 6px;
+}
+.reservar-pagina .car-headlights {
+  position: absolute; bottom: 5px; left: 10px; right: 10px; height: 4px;
+  background: #ffffff; border-radius: 4px; box-shadow: 0 0 10px #ffffff;
+}
+@keyframes reservarFloatCar {
+  0%, 100% { transform: translate(-50%, -50%); }
+  50% { transform: translate(-50%, -55%); }
+}
+
+/* Estilos que estaban en línea en el HTML */
+.reservar-pagina .reservar-tarjeta { align-items: stretch; }
+.reservar-pagina .reservar-lateral { width: 100%; max-width: 250px; }
+.reservar-pagina .reservar-info { flex: 1; width: 100%; }
+.reservar-pagina .reservar-intro { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
+.reservar-pagina .reservar-form { display: flex; flex-direction: column; gap: 15px; }
+.reservar-pagina .reservar-grupo { padding: 15px; }
+.reservar-pagina .reservar-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.reservar-pagina .reservar-enviar { width: 100%; margin-top: 10px; }
+.reservar-pagina .reservar-enviar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.reservar-pagina .reservar-tips { margin-top: 30px; text-align: left; }
+.reservar-pagina .reservar-tips h4 { color: var(--text-primary); margin-bottom: 10px; font-size: 14px; }
+.reservar-pagina .reservar-tips ul { list-style: none; padding: 0; margin: 0; }
+.reservar-pagina .reservar-tips li {
+  position: relative; padding-left: 15px; margin-bottom: 10px;
+  font-size: 13px; line-height: 1.5; color: var(--text-secondary);
+}
+.reservar-pagina .reservar-tips li::before { content: '•'; position: absolute; left: 0; color: var(--neon-cyan); }
+
+.reservar-pagina .reservar-mensaje { margin: 0; font-size: 14px; line-height: 1.5; color: #ffffff; }
+.reservar-pagina .reservar-mensaje--error { color: #ff8a8a; }
+
+.reservar-pagina .reservar-volver { margin-top: 20px; text-align: center; }
+.reservar-pagina .reservar-volver a { color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: 0.2s; }
+.reservar-pagina .reservar-volver a:hover { color: #ffffff; }
+
+@media (max-width: 600px) {
+  .reservar-pagina .reservar-dos { grid-template-columns: 1fr; }
+}

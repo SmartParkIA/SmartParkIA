@@ -1,0 +1,180 @@
+.pago-container {
+  min-height: 80vh;
+  padding: 30px;
+  color: #fff;
+  background: #000;
+  font-family: Arial, sans-serif;
+}
+ 
+.pago-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 30px;
+}
+ 
+.pago-header > svg {
+  font-size: 38px;
+  color: #fff;
+}
+ 
+.pago-header h1 {
+  margin: 0 0 8px;
+}
+ 
+.pago-header p {
+  color: #aaa;
+  margin: 0;
+}
+ 
+.pago-card {
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 30px;
+  background: #121212;
+  border: 1px solid #333;
+  border-radius: 16px;
+}
+ 
+.pago-card h2 {
+  margin-top: 0;
+  margin-bottom: 25px;
+}
+ 
+.pago-dato {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid #292929;
+}
+ 
+.pago-dato svg {
+  color: #aaa;
+}
+ 
+.pago-dato span {
+  color: #aaa;
+  flex: 1;
+}
+ 
+.pago-dato strong {
+  text-align: right;
+}
+ 
+.pago-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 25px;
+  padding: 20px;
+  background: #202020;
+  border-radius: 12px;
+}
+ 
+.pago-total strong {
+  font-size: 24px;
+}
+ 
+.pago-aviso {
+  color: #aaa;
+  font-size: 13px;
+  text-align: center;
+  margin: 20px 0;
+}
+ 
+.btn-pagar {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 10px;
+  background: #fff;
+  color: #000;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+ 
+.btn-pagar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+ 
+.pago-error {
+  max-width: 650px;
+  margin: 0 auto 20px;
+  padding: 15px;
+  background: #351717;
+  border: 1px solid #803333;
+  border-radius: 10px;
+  color: #ffbaba;
+  display: flex;
+  gap: 10px;
+}
+ 
+.pago-spinner {
+  animation: pago-girar 1s linear infinite;
+}
+ 
+@keyframes pago-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+ 
+.pago-exito {
+  text-align: center;
+}
+ 
+.pago-exito-icono {
+  font-size: 55px;
+  color: #55d98b;
+  margin-bottom: 15px;
+}
+ 
+.qr-salida {
+  margin-top: 25px;
+  padding: 25px;
+  background: #202020;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+ 
+.qr-salida > svg {
+  font-size: 45px;
+}
+ 
+.pago-vacio {
+  text-align: center;
+}
+ 
+.pago-vacio > svg {
+  font-size: 45px;
+  margin-bottom: 15px;
+  color: #aaa;
+}
+ 
+@media (max-width: 600px) {
+  .pago-container {
+    padding: 18px;
+  }
+ 
+  .pago-card {
+    padding: 20px;
+  }
+ 
+  .pago-dato {
+    flex-wrap: wrap;
+  }
+ 
+  .pago-dato strong {
+    width: 100%;
+    text-align: left;
+    padding-left: 28px;
+  }
+ 
+  .pago-total strong {
+    font-size: 19px;
+  }
+}
