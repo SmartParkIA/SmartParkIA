@@ -3,7 +3,7 @@ import fs from "fs";
 
 // Carga el archivo de credenciales de forma compatible con ES Modules
 const serviceAccount = JSON.parse(
-  fs.readFileSync(new URL("./serviceAccountKey.json", import.meta.url))
+  fs.readFileSync(new URL("./etc/secrets/serviceAccountKey.json", import.meta.url))
 );
 
 admin.initializeApp({
