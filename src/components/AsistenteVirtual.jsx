@@ -318,6 +318,8 @@ export default function AsistenteVirtual() {
 
   const shouldShowAssistant = reservasActivas.length > 0;
 
+  const esSalida = llegadaInfo?.qr?.tipo === "salida";
+
   /* ============ 14. Si no hay nada → null ============ */
   if (!shouldShowAssistant && !showLlegada) return null;
 
@@ -555,29 +557,52 @@ export default function AsistenteVirtual() {
               </div>
             </div>
 
-            {/* ========= TEXTO ========= */}
+                        {/* ========= TEXTO ========= */}
             <div className="av-ar-content">
-              <h2>¡Llegaste!</h2>
+              <h2>
+                {esSalida ? "¡BUEN CAMINO!" : "¡LLEGASTE!"}
+              </h2>
+
               <p className="av-ar-sub">
-                <FaMapMarkerAlt /> {llegadaInfo.reserva.estacionamiento}
+                <FaMapMarkerAlt />
+                {esSalida
+                  ? "Gracias por visitarnos. Esperamos verte pronto."
+                  : llegadaInfo.reserva.estacionamiento}
               </p>
+
               <div className="av-ar-badge">
-                <FaParking /> Cajón <strong>{llegadaInfo.reserva.espacio}</strong>
+                <FaParking /> Cajón{" "}
+                <strong>{llegadaInfo.reserva.espacio}</strong>
               </div>
             </div>
 
-            {/* ========= BOTONES ========= */}
+                        {/* ========= BOTONES ========= */}
             <div className="av-ar-actions">
-              <button className="av-ar-btn av-ar-btn--ghost" onClick={handleDespues}>
-                <FaTimes /> Después
-              </button>
-              <button
-                className="av-ar-btn av-ar-btn--primary"
-                onClick={handleVerInstrucciones}
-              >
-                <FaRobot /> Usar asistente
-                <span className="av-ar-btn-shimmer"></span>
-              </button>
+              {esSalida ? (
+                <button
+                  className="av-ar-btn av-ar-btn--primary"
+                  onClick={handleDespues}
+                >
+                  <FaCheckCircle /> Gracias
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="av-ar-btn av-ar-btn--ghost"
+                    onClick={handleDespues}
+                  >
+                    <FaTimes /> Después
+                  </button>
+
+                  <button
+                    className="av-ar-btn av-ar-btn--primary"
+                    onClick={handleVerInstrucciones}
+                  >
+                    <FaRobot /> Usar asistente
+                    <span className="av-ar-btn-shimmer"></span>
+                  </button>
+                </>
+              )}
             </div>
 
             {/* ========= CONFETTI ========= */}

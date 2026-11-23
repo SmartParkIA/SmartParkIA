@@ -1,15 +1,16 @@
-import { Html5Qrcode } from "html5-qrcode";
+ 
 import { useEffect, useRef, useState } from "react";
-import {
-    FaCamera,
-    FaCar,
-    FaCheckCircle,
-    FaParking,
-    FaQrcode,
-    FaSpinner,
-    FaTimesCircle
-} from "react-icons/fa";
+import { Html5Qrcode } from "html5-qrcode";
 import { auth } from "../firebase/config.js";
+import {
+  FaQrcode,
+  FaCamera,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaSpinner,
+  FaCar,
+  FaParking
+} from "react-icons/fa";
 import "../styles/EscanearAcceso.css";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
  
@@ -280,3 +281,4 @@ export default function EscanearAcceso() {
     </main>
   );
 }
+ 

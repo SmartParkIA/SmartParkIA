@@ -1,9 +1,9 @@
+import { Suspense, lazy, useState, useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { Suspense, lazy, useEffect, useState } from 'react';
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
-import AsistenteVirtual from './components/AsistenteVirtual';
 import { auth, db } from './firebase/config.js';
+import AsistenteVirtual from './components/AsistenteVirtual';
  
 // Páginas públicas
 import Login from './components/login.jsx';
@@ -193,3 +193,4 @@ function App() {
 }
  
 export default App;
+ 

@@ -732,6 +732,7 @@ const generarTextoQR = (qr) => {
           <span>{toast.msg}</span>
         </div>
       )}
+ 
 
       {/* ============ ESTILOS ============ */}
      
