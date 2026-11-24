@@ -218,24 +218,46 @@ export default function ReservarEspacio() {
       return "";
     }
 
+    // ================================================================
+    // 🚗 VALIDACIÓN DE PLACA MEXICANA
+    // ================================================================
     if (id === "placa") {
       const v = (value || "").trim().toUpperCase();
+
+      // 1. Obligatoria en modo estricto
       if (!v) return strict ? "La placa es obligatoria." : "";
-      if (!strict && v.length < 6) return "";
 
-      const clean = v.replace(/-/g, "");
-
-      if (/[ÑQ]/.test(clean)) {
-        return "Las letras Ñ y Q no son válidas en placas mexicanas.";
+      // 2. Sin espacios
+      if (/\s/.test(value)) {
+        return "La placa no debe contener espacios.";
       }
 
-      const isAutoEstandar = /^[A-Z]{3}\d{3,4}$/.test(clean);
-      const isAutoNuevo = /^[A-Z]{3}\d{3}[A-Z]$/.test(clean);
-      const isCamion = /^[A-Z]{2}\d{4,5}[A-Z]$/.test(clean);
-      const isMoto = /^Y\d{3}[A-Z]{2}$/.test(clean);
+      // 4 y 5. Solo letras A-Z, números 0-9 y guiones
+      // (bloquea Ñ, acentos, @ # $, etc.)
+      if (/[^A-Z0-9-]/.test(v)) {
+        return "Solo se permiten letras A-Z, números 0-9 y guiones (sin Ñ, acentos ni símbolos).";
+      }
 
-      if (!isAutoEstandar && !isAutoNuevo && !isCamion && !isMoto) {
-        return "Formato inválido. Ejemplos: ABC-123, ABC-1234, ABC-123-A, AA-1234-A, Y-123-AB.";
+      // Guiones mal formados: al inicio, al final o duplicados
+      if (/^-|-$|--/.test(v)) {
+        return "Los guiones deben separar bloques, no ir al inicio, final ni repetirse.";
+      }
+
+      // En modo no-strict (mientras escribe) solo validamos las reglas básicas
+      if (!strict) return "";
+
+      // 7. Formatos aceptados (con y sin guiones)
+      const formatosValidos = [
+        /^[A-Z]{3}-\d{3}-[A-Z]$/, // ABC-123-A   (Nuevo)
+        /^[A-Z]{3}-\d{4}$/,       // ABC-1234    (Edomex viejo)
+        /^\d{3}-[A-Z]{3}$/,       // 123-ABC     (CDMX viejo)
+        /^[A-Z]{3}\d{3}[A-Z]$/,   // ABC123A     (Nuevo sin guiones)
+        /^[A-Z]{3}\d{4}$/,        // ABC1234     (Edomex viejo sin guiones)
+        /^\d{3}[A-Z]{3}$/,        // 123ABC      (CDMX viejo sin guiones)
+      ];
+
+      if (!formatosValidos.some((re) => re.test(v))) {
+        return "Formato inválido. Ejemplos: ABC-123-A, ABC-1234, 123-ABC, ABC123A, ABC1234, 123ABC.";
       }
 
       return "";
@@ -469,7 +491,9 @@ export default function ReservarEspacio() {
     let newValue = value;
 
     if (id === "placa") {
+      // 1. Mayúsculas + corrección O→0, I→1
       let raw = value.toUpperCase().replace(/O/g, "0").replace(/I/g, "1");
+
       const corregido = value.toUpperCase();
       if (raw !== corregido) {
         const ahora = Date.now();
@@ -478,7 +502,19 @@ export default function ReservarEspacio() {
           lastCorrectionToastRef.current = ahora;
         }
       }
-      newValue = raw.replace(/[^A-Z0-9-]/g, "");
+
+      // 3, 4, 5 y 6. Quita espacios, Ñ, acentos, símbolos raros y deja solo A-Z, 0-9 y "-"
+      const limpia = raw.replace(/[^A-Z0-9-]/g, "");
+
+      if (limpia !== raw) {
+        const ahora = Date.now();
+        if (ahora - lastCorrectionToastRef.current > 3000) {
+          showToast("Se eliminaron caracteres no permitidos en la placa.", "info");
+          lastCorrectionToastRef.current = ahora;
+        }
+      }
+
+      newValue = limpia;
     }
 
     setForm((f) => ({ ...f, [id]: newValue }));
@@ -1546,7 +1582,7 @@ export default function ReservarEspacio() {
                         value={form.placa}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        placeholder="Ej. ABC-123-A"
+                        placeholder="Ej. ABC-123-A / ABC-1234"
                         maxLength={10}
                         className={errors.placa ? "input-error" : ""}
                       />

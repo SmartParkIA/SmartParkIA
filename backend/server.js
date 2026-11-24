@@ -16,14 +16,35 @@ const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
  
 const app = express();
+
+// ==========================================
+// CONFIGURACIÓN DE CORS PARA PRODUCCIÓN Y LOCAL
+// ==========================================
+const allowedOrigins = [
+  'http://localhost:3000', 
+  'http://localhost:5173', // Por si usas Vite en lugar de CRA
+  'https://smartparkiaa.netlify.app' // 👈 Tu URL de Netlify
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permitir peticiones sin origen (como Postman o apps móviles) o si está en la lista
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true
+}));
+// ==========================================
  
-app.use(cors());
 app.use(express.json({ limit: "10mb" }));
  
 const PORT = process.env.PORT || 3001;
  
 // ==========================================
-// 1. CONFIGURACIÓN MQTT
+// 1. CONFIGURACIÓN MQTT (INTACTO)
 // ==========================================
  
 const MQTT_BROKER =
@@ -1215,7 +1236,6 @@ async function verificarUsuario(req, res, next) {
     };
  
     next();
- 
   } catch (error) {
     console.error("Error de autenticación del usuario:", error.message);
  
@@ -1317,11 +1337,9 @@ app.post("/api/pagos/cotizar", verificarUsuario, async (req, res) => {
       const minutosEstacionado =
         milisegundosEstacionado / 60000;
 
-      const monto = Number(
-        (
-          (tarifaHora * milisegundosEstacionado) / 3600000
-        ).toFixed(2)
-      );
+      // 🕒 REDONDEO A HORAS COMPLETAS
+      const horasCompletas = Math.ceil(minutosEstacionado / 60);
+      const monto = Number((horasCompletas * tarifaHora).toFixed(2));
 
       cotizaciones.push({
         accesoId: documento.id,
@@ -1359,7 +1377,6 @@ app.post("/api/pagos/cotizar", verificarUsuario, async (req, res) => {
     });
   }
 });
- 
  
 // ==========================================
 // CONFIRMAR PAGO Y GENERAR QR DE SALIDA
@@ -1423,7 +1440,7 @@ app.post("/api/pagos/confirmar", verificarUsuario, async (req, res) => {
         throw new Error("DATOS_ESTANCIA_INVALIDOS");
       }
  
-      // Recalcular el importe en el servidor.
+            // Recalcular el importe en el servidor.
       const ahora = Date.now();
  
       const milisegundosEstacionado = Math.max(
@@ -1431,10 +1448,12 @@ app.post("/api/pagos/confirmar", verificarUsuario, async (req, res) => {
         ahora - horaEntrada.getTime()
       );
  
-      const monto = Number(
-        ((tarifaHora * milisegundosEstacionado) / 3600000).toFixed(2)
-      );
+      // 🕒 REDONDEO A HORAS COMPLETAS
+      const minutosEstacionado = milisegundosEstacionado / 60000;
+      const horasCompletas = Math.ceil(minutosEstacionado / 60);
+      const monto = Number((horasCompletas * tarifaHora).toFixed(2));
  
+      // ✅ LÍNEA AGREGADA: Faltaba definir esta variable, por eso fallaba el servidor
       const referencia = `SP-${pagoRef.id}`;
  
       // Registrar el pago simulado.
@@ -1514,7 +1533,7 @@ app.post("/api/pagos/confirmar", verificarUsuario, async (req, res) => {
  
  
 // ==========================================
-// VALIDAR QR Y REGISTRAR ACCESO
+// VALIDAR QR Y REGISTRAR ACCESO (INTACTO)
 // ==========================================
  
 app.post(
@@ -1848,4 +1867,3 @@ try {
     }
   }
 );
- 
